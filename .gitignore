@@ -91,3 +91,9 @@ go.work.sum
 # Build and development
 *.tar.gz
 *.zip
+
+# MCP CLI-Ent
+RELEASE.md
+mcp-cli-ent
+mcp-cli-ent-*
+
