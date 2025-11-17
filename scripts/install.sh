@@ -103,6 +103,14 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Get version of installed binary
+get_installed_version() {
+    local binary_path="$1"
+    if [[ -f "$binary_path" ]]; then
+        "$binary_path" --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1 || echo ""
+    fi
+}
+
 # Install dependencies if needed
 install_dependencies() {
     if [[ "$OSTYPE" == "linux-gnu" ]]; then
@@ -171,19 +179,39 @@ install_mcp_cli() {
 
     # Check if already installed
     local binary_path="$install_dir_unix/mcp-cli-ent"
-    if [[ "$platform" != *"windows"* ]]; then
-        binary_path="$install_dir/mcp-cli-ent"
-    else
+    if [[ "$platform" == *"windows"* ]]; then
         binary_path="$install_dir\\mcp-cli-ent.exe"
     fi
 
     if [[ -f "$binary_path" ]] && [[ "${SKIP_EXISTING:-}" != "1" ]]; then
-        warn "MCP CLI is already installed at: $binary_path"
-        read -p "Do you want to reinstall? [y/N] " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "Installation cancelled."
-            exit 0
+        # Get installed version
+        local installed_version
+        installed_version="$(get_installed_version "$binary_path")"
+
+        if [[ -n "$installed_version" ]] && [[ "$installed_version" == "$version" ]]; then
+            warn "MCP CLI $version is already installed at: $binary_path"
+            read -p "Same version detected. Reinstall anyway? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                info "Installation cancelled."
+                exit 0
+            fi
+        elif [[ -n "$installed_version" ]]; then
+            warn "MCP CLI $installed_version is installed, but latest version is $version"
+            read -p "Upgrade to latest version? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                info "Installation cancelled."
+                exit 0
+            fi
+        else
+            warn "MCP CLI is already installed at: $binary_path (version unknown)"
+            read -p "Do you want to reinstall? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                info "Installation cancelled."
+                exit 0
+            fi
         fi
     fi
 
@@ -276,7 +304,7 @@ show_first_run_instructions() {
     echo "  mcp-cli-ent list-servers     # List configured servers"
     echo
     echo "Configuration directory:"
-    if [[ "$OSTYPE" == "darwin" ]] || [[ "$OSTYPE" == "linux-gnu" ]]; then
+    if [[ "$OSTYPE" == darwin* ]] || [[ "$OSTYPE" == "linux-gnu"* ]]; then
         echo "  ~/.config/mcp-cli-ent/      # Unix-like systems"
     elif detect_wsl; then
         echo "  ~/.config/mcp-cli-ent/      # WSL"

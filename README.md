@@ -29,27 +29,6 @@ The name **CLI-Ent** embodies this philosophy:
 
 ## Features
 
-### 🚀 Persistent Browser Sessions - Gemini CLI Experience
-MCP CLI-Ent introduces a **complete persistent daemon architecture** that provides Gemini CLI-like session persistence for browser automation:
-
-- **Background Daemon Service**: Cross-platform daemon manages persistent MCP connections
-- **Automatic Session Creation**: Browser sessions automatically created when tools are called
-- **Multi-Command Persistence**: Browser state maintained across CLI command invocations
-- **Zero Configuration**: Works out of the box with existing `mcp_servers.json` configurations
-- **Smart Client Bridge**: Automatic daemon usage with graceful fallback to direct connections
-- **Multi-MCP Server Support**: Simultaneous sessions for Chrome DevTools, Playwright, and other persistent servers
-
-**Example Gemini CLI-like Workflow:**
-```bash
-# First call automatically starts daemon and browser session
-mcp-cli-ent call-tool playwright browser_navigate '{"url": "https://google.com"}'
-
-# Browser stays open for subsequent commands - no reinitialization needed!
-mcp-cli-ent call-tool playwright browser_take_screenshot '{}'
-mcp-cli-ent call-tool playwright browser_type '{"element": "combobox", "ref": "e45", "text": "claude"}'
-mcp-cli-ent call-tool playwright browser_click '{"element": "link", "ref": "e22"}'
-```
-
 ### 🔧 Core Capabilities
 - **Cross-Platform Compatibility**: Works seamlessly across Claude Code, VSCode, and other MCP-compatible environments
 - **Zero Runtime Dependencies**: Single binary deployment with no external requirements
@@ -59,6 +38,17 @@ mcp-cli-ent call-tool playwright browser_click '{"element": "link", "ref": "e22"
 - **Environment Variable Support**: Secure credential management via `${VAR_NAME}` substitution
 - **Robust Error Handling**: Clear error messages and proper exit codes
 - **Binary Data Handling**: Intelligent display of images and large data without terminal flooding
+
+### 🚀 Persistent Browser Sessions - Gemini CLI Experience
+
+MCP CLI-Ent introduces a **complete persistent daemon architecture** that provides Gemini CLI-like session persistence for browser automation:
+
+- **Background Daemon Service**: Cross-platform daemon manages persistent MCP connections
+- **Automatic Session Creation**: Browser sessions automatically created when tools are called
+- **Multi-Command Persistence**: Browser state maintained across CLI command invocations
+- **Zero Configuration**: Works out of the box with existing `mcp_servers.json` configurations
+- **Smart Client Bridge**: Automatic daemon usage with graceful fallback to direct connections
+- **Multi-MCP Server Support**: Simultaneous sessions for Chrome DevTools, Playwright, and other persistent servers
 
 ### 🔧 Daemon Management
 ```bash
