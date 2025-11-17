@@ -13,14 +13,25 @@ type Configuration struct {
 
 // ServerConfig represents configuration for a single MCP server
 type ServerConfig struct {
-	Disabled bool              `json:"disabled,omitempty"`
-	Type     string            `json:"type,omitempty"`
-	URL      string            `json:"url,omitempty"`
-	Command  string            `json:"command,omitempty"`
-	Args     []string          `json:"args,omitempty"`
-	Env      map[string]string `json:"env,omitempty"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Timeout  int               `json:"timeout,omitempty"`
+	Disabled  bool              `json:"disabled,omitempty"`
+	Type      string            `json:"type,omitempty"`
+	URL       string            `json:"url,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	Args      []string          `json:"args,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Timeout   int               `json:"timeout,omitempty"`
+	Session   SessionConfig     `json:"session,omitempty"`
+	Persistent bool             `json:"persistent,omitempty"`
+}
+
+// SessionConfig contains session-specific configuration for a server
+type SessionConfig struct {
+	Type       string `json:"type,omitempty"`       // "persistent", "stateless", "hybrid"
+	AutoStart  bool   `json:"autoStart,omitempty"`  // Auto-start session on first use
+	Timeout    int    `json:"timeout,omitempty"`    // Session timeout in seconds
+	MaxIdle    int    `json:"maxIdle,omitempty"`    // Max idle time before auto-stop
+	HealthCheck bool  `json:"healthCheck,omitempty"` // Enable periodic health checks
 }
 
 // ServerStatus represents the status of a server

@@ -7,7 +7,7 @@ echo "Testing installer script functions..."
 
 # Override the network-dependent functions
 get_latest_version() {
-    echo "v0.1.0"
+    echo "v0.2.0"
 }
 
 # Source the installer script but don't run main

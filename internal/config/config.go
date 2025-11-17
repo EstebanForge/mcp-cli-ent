@@ -278,3 +278,25 @@ func CreateExampleConfig(filename string) error {
 
 	return nil
 }
+
+// Config represents the MCP servers configuration (alias for backwards compatibility)
+type Config = Configuration
+
+// GetConfigPath returns the configuration file path
+func GetConfigPath(configPath string) string {
+	if configPath != "" {
+		return configPath
+	}
+
+	// Try to find config in standard locations
+	if path, err := FindConfigFile(); err == nil {
+		return path
+	}
+
+	// Fall back to default location
+	if configDir, err := GetConfigDir(); err == nil {
+		return filepath.Join(configDir, "mcp_servers.json")
+	}
+
+	return "mcp_servers.json"
+}

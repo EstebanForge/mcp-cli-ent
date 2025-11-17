@@ -7,10 +7,43 @@ import (
 
 // MCPClient defines the interface for MCP clients
 type MCPClient interface {
+	// Core protocol
+	Initialize(ctx context.Context, params *InitializeParams) (*InitializeResult, error)
+	Close() error
+
+	// Tools
 	ListTools(ctx context.Context) ([]Tool, error)
 	CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*ToolResult, error)
+
+	// Resources
 	ListResources(ctx context.Context) ([]Resource, error)
-	Close() error
+
+	// Sampling - enables agentic workflows
+	CreateMessage(ctx context.Context, request *CreateMessageRequest) (*CreateMessageResult, error)
+
+	// Elicitation - enables dynamic information gathering
+	RequestInput(ctx context.Context, params *RequestInputParams) (*RequestInputResult, error)
+
+	// Roots - filesystem boundary management
+	ListRoots(ctx context.Context) ([]Root, error)
+
+	// Notifications (one-way)
+	NotifyRootsListChanged(roots []Root) error
+}
+
+// SamplingHandler defines how clients should handle sampling requests
+type SamplingHandler interface {
+	HandleSamplingRequest(ctx context.Context, request *CreateMessageRequest) (*CreateMessageResult, error)
+}
+
+// ElicitationHandler defines how clients should handle elicitation requests
+type ElicitationHandler interface {
+	HandleElicitationRequest(ctx context.Context, params *RequestInputParams) (*RequestInputResult, error)
+}
+
+// RootsHandler defines how clients should handle roots changes
+type RootsHandler interface {
+	HandleRootsChange(roots []Root) error
 }
 
 // ClientConfig holds configuration for MCP clients

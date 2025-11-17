@@ -123,6 +123,151 @@ func (c *HTTPClient) ListResources(ctx context.Context) ([]mcp.Resource, error) 
 	return listResult.Resources, nil
 }
 
+// Initialize the MCP connection
+func (c *HTTPClient) Initialize(ctx context.Context, params *mcp.InitializeParams) (*mcp.InitializeResult, error) {
+	req := mcp.NewRequest(0, "initialize", params)
+
+	result, err := c.sendRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize: %w", err)
+	}
+
+	if result == nil {
+		return nil, fmt.Errorf("no result received")
+	}
+
+	// Parse the result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	var initResult mcp.InitializeResult
+	if err := json.Unmarshal(resultBytes, &initResult); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal initialize result: %w", err)
+	}
+
+	return &initResult, nil
+}
+
+// CreateMessage handles sampling requests
+func (c *HTTPClient) CreateMessage(ctx context.Context, request *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
+	req := mcp.NewRequest(0, "sampling/createMessage", request)
+
+	result, err := c.sendRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create message: %w", err)
+	}
+
+	if result == nil {
+		return nil, fmt.Errorf("no result received")
+	}
+
+	// Parse the result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	var messageResult mcp.CreateMessageResult
+	if err := json.Unmarshal(resultBytes, &messageResult); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal message result: %w", err)
+	}
+
+	return &messageResult, nil
+}
+
+// RequestInput handles elicitation requests
+func (c *HTTPClient) RequestInput(ctx context.Context, params *mcp.RequestInputParams) (*mcp.RequestInputResult, error) {
+	req := mcp.NewRequest(0, "elicitation/requestInput", params)
+
+	result, err := c.sendRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request input: %w", err)
+	}
+
+	if result == nil {
+		return nil, fmt.Errorf("no result received")
+	}
+
+	// Parse the result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	var inputResult mcp.RequestInputResult
+	if err := json.Unmarshal(resultBytes, &inputResult); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal input result: %w", err)
+	}
+
+	return &inputResult, nil
+}
+
+// ListRoots retrieves filesystem roots
+func (c *HTTPClient) ListRoots(ctx context.Context) ([]mcp.Root, error) {
+	req := mcp.NewRequest(0, "roots/list", nil)
+
+	result, err := c.sendRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list roots: %w", err)
+	}
+
+	if result == nil {
+		return nil, fmt.Errorf("no result received")
+	}
+
+	// Parse the result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	var listResult struct {
+		Roots []mcp.Root `json:"roots"`
+	}
+	if err := json.Unmarshal(resultBytes, &listResult); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal roots list result: %w", err)
+	}
+
+	return listResult.Roots, nil
+}
+
+// NotifyRootsListChanged sends notification about roots change
+func (c *HTTPClient) NotifyRootsListChanged(roots []mcp.Root) error {
+	params := map[string]interface{}{
+		"roots": roots,
+	}
+	req := mcp.NewRequest(nil, "roots/list_changed", params)
+
+	// For notifications, we send without expecting a response
+	reqBytes, err := mcp.MarshalRequest(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification: %w", err)
+	}
+
+	ctx := context.Background()
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewBuffer(reqBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	for key, value := range c.headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// Send notification (fire and forget)
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send notification: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
 // Close closes the HTTP client
 func (c *HTTPClient) Close() error {
 	// HTTP client doesn't need explicit closing

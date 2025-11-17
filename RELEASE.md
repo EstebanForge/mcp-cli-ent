@@ -50,17 +50,19 @@ make clean && make build-release
 
 ### 2. Commit and Tag
 
+> **IMPORTANT**: Do not commit and push automatically. This is the maintainer's responsibility.
+
 ```bash
-# 1. Stage all changes
+# 1. Stage all changes (for maintainer)
 git add .
 
-# 2. Commit with semantic message
-git commit -m "Release v0.1.0"
+# 2. Commit with semantic message (for maintainer)
+git commit -m "Release v0.2.0"
 
-# 3. Create and push tag
-git tag v0.1.0
+# 3. Create and push tag (for maintainer)
+git tag v0.2.0
 git push origin main
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
 ### 3. Automated Release
@@ -98,13 +100,13 @@ Full installation instructions: https://github.com/EstebanForge/mcp-cli-ent#inst
 EOF
 
 # 3. Create GitHub release
-gh release create v0.1.0 \
-  --title "v0.1.0" \
+gh release create v0.2.0 \
+  --title "v0.2.0" \
   --notes-file release_notes.md \
   dist/*
 
 # 3. Upload binaries
-gh release upload v0.1.0 dist/*
+gh release upload v0.2.0 dist/*
 ```
 
 ## Post-Release Verification
@@ -160,7 +162,7 @@ Each binary includes embedded version information:
 
 ```bash
 mcp-cli-ent --version
-# Output: mcp-cli-ent version 0.1.0 (commit: abc123, built: 2025-11-15T23:00:00Z, go: go1.21.0)
+# Output: mcp-cli-ent version 0.2.0 (commit: abc123, built: 2025-11-15T23:00:00Z, go: go1.21.0)
 ```
 
 ## Troubleshooting
@@ -208,7 +210,7 @@ git remote -v
 gh auth status
 
 # Check release assets
-gh release view v0.1.0
+gh release view v0.2.0
 ```
 
 ## Automation
@@ -232,9 +234,9 @@ If automation fails, use the manual process in Option B above.
 If issues are discovered after release:
 
 1. **Unpublish** the GitHub release
-2. **Delete** the tag: `git tag -d v0.1.0 && git push origin :v0.1.0`
+2. **Delete** the tag: `git tag -d v0.2.0 && git push origin :v0.2.0`
 3. **Fix** the issues
-4. **Recreate** release with bumped version: `v0.1.1`
+4. **Recreate** release with bumped version: `v0.2.1`
 
 ## Future Improvements
 

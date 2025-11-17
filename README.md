@@ -1,8 +1,8 @@
-# MCP CLI-ENT
+# MCP CLI-Ent
 
 *"Do not be hasty."*
 
-A wise context-guardian for your AI agent's MCP (Model Context Protocol) servers.
+A wise context-guardian for your AI agent's MCP (Model Context Protocol) servers with **Gemini CLI-like persistent browser sessions**.
 
 ## 🌲 The Problem: Context Window Deforestation
 
@@ -23,30 +23,61 @@ This provides a complete, context-safe interaction model in several layers:
 - **Structured Responses**: As a final layer of defense, `mcp-cli-ent` intercepts the verbose, raw JSON *output* from the tool and returns a clean, parsed summary, preventing the context from being flooded by a successful call.
 - **True Context Preservation**: This multi-layer "Discover, Execute, Summarize" approach maintains focus on high-signal information, allowing the agent to use its context for complex reasoning, not for storing definitions or parsing output.
 
-The name **CLI-Ent** embodies this dual purpose:
-- **CLI**: A **C**ommand **L**ine **I**nterface for accessing MCP servers.
-- **Ent**: Inspired by the wise, deliberate guardians from *Lord of the Rings*, who protect their environment (the context window) from "hasty" and wasteful-loading.
+The name **CLI-Ent** embodies this philosophy:
+- **CLI**: A **C**ommand **L**ine **I**nterface for accessing MCP servers with persistent browser sessions.
+- **Ent**: Inspired by the wise, deliberate guardians from *Lord of the Rings*, who protect their environment (the context window) from "hasty" and wasteful-loading, now with enhanced capabilities for seamless browser automation workflows.
 
 ## Features
 
-- **Cross-Platform Compatibility**: Works seamlessly across Claude Code, VSCode, and other MCP-compatible environments.
-- **Cross-platform support** - Single binary for Windows, macOS, and Linux
-- **Zero runtime dependencies** - No external dependencies required
-- **Gemini, OpenCode, Claude Code, VSCode (and forks) compatible** - Uses the same usual `mcp_servers.json` configuration format
-- **HTTP and stdio transport support** - Works with both HTTP-based and stdio-based MCP servers
-- **Multi-server management** - Configure and interact with multiple MCP servers
-- **Environment variable substitution** - Use `${VAR_NAME}` in headers and environment
-- **Comprehensive error handling** - Clear error messages and proper exit codes
+### 🚀 Persistent Browser Sessions - Gemini CLI Experience
+MCP CLI-Ent introduces a **complete persistent daemon architecture** that provides Gemini CLI-like session persistence for browser automation:
+
+- **Background Daemon Service**: Cross-platform daemon manages persistent MCP connections
+- **Automatic Session Creation**: Browser sessions automatically created when tools are called
+- **Multi-Command Persistence**: Browser state maintained across CLI command invocations
+- **Zero Configuration**: Works out of the box with existing `mcp_servers.json` configurations
+- **Smart Client Bridge**: Automatic daemon usage with graceful fallback to direct connections
+- **Multi-MCP Server Support**: Simultaneous sessions for Chrome DevTools, Playwright, and other persistent servers
+
+**Example Gemini CLI-like Workflow:**
+```bash
+# First call automatically starts daemon and browser session
+mcp-cli-ent call-tool playwright browser_navigate '{"url": "https://google.com"}'
+
+# Browser stays open for subsequent commands - no reinitialization needed!
+mcp-cli-ent call-tool playwright browser_take_screenshot '{}'
+mcp-cli-ent call-tool playwright browser_type '{"element": "combobox", "ref": "e45", "text": "claude"}'
+mcp-cli-ent call-tool playwright browser_click '{"element": "link", "ref": "e22"}'
+```
+
+### 🔧 Core Capabilities
+- **Cross-Platform Compatibility**: Works seamlessly across Claude Code, VSCode, and other MCP-compatible environments
+- **Zero Runtime Dependencies**: Single binary deployment with no external requirements
+- **Universal Configuration**: Compatible with Claude Code and VSCode `mcp_servers.json` format
+- **Dual Transport Support**: HTTP and stdio-based MCP servers
+- **Multi-Server Management**: Configure and interact with multiple MCP servers
+- **Environment Variable Support**: Secure credential management via `${VAR_NAME}` substitution
+- **Robust Error Handling**: Clear error messages and proper exit codes
+- **Binary Data Handling**: Intelligent display of images and large data without terminal flooding
+
+### 🔧 Daemon Management
+```bash
+# Manual daemon control (optional - daemon auto-starts when needed)
+mcp-cli-ent daemon start              # Start background daemon
+mcp-cli-ent daemon status             # Show daemon status and active sessions
+mcp-cli-ent daemon logs               # View daemon logs
+mcp-cli-ent daemon stop               # Stop daemon
+```
 
 ## Screenshots
 
-### MCP CLI-ENT in Action
+### MCP CLI-Ent in Action
 
 Tool Execution - Getting Documentation via Context7:
 ![MCP CLI-ENT Server List](screenshot-01.png)
 ![MCP CLI-ENT Tool Call](screenshot-02.png)
 
-The CLI-ENT provides a clean, command-line interface for interacting with MCP servers while preserving your AI agent's context window.
+The CLI-Ent provides a clean, command-line interface for interacting with MCP servers while preserving your AI agent's context window.
 
 ## Installation
 
@@ -146,7 +177,15 @@ The configuration file format is compatible with Claude Code and VSCode:
   "mcpServers": {
     "chrome-devtools": {
       "command": "npx",
-      "args": ["chrome-devtools-mcp@latest"]
+      "args": ["-y", "chrome-devtools-mcp@latest", "--isolated"],
+      "persistent": true,
+      "timeout": 60
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "persistent": true,
+      "timeout": 60
     },
     "context7": {
       "type": "http",
@@ -154,16 +193,19 @@ The configuration file format is compatible with Claude Code and VSCode:
       "headers": {
         "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
       },
+      "persistent": false,
       "timeout": 30
     },
     "sequential-thinking": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "persistent": false,
       "timeout": 30
     },
     "deepwiki": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.deepwiki.com/sse"],
+      "persistent": false,
       "timeout": 30
     }
   }
@@ -179,6 +221,8 @@ The configuration file format is compatible with Claude Code and VSCode:
 - **Environment substitution**: Use `${VAR_NAME}` in header values
 - **Disable servers**: Set `"disabled": true` to temporarily disable a server
 - **Timeout**: Set `"timeout"` in seconds (default: 30)
+- **Persistent Sessions**: Set `"persistent": true` for browser automation servers (Chrome DevTools, Playwright)
+- **Chrome Isolation**: Automatically use `--isolated` flag for Chrome DevTools to prevent profile conflicts
 
 ### Creating an Example Configuration
 
@@ -188,31 +232,86 @@ mcp-cli-ent create-config
 
 ## Usage
 
-### List all configured servers
+### Basic Operations
 
 ```bash
+# List all configured servers
 mcp-cli-ent list-servers
-```
 
-### List tools from all enabled servers
-
-```bash
+# List tools from all enabled servers
 mcp-cli-ent list-tools
-```
 
-### List tools from a specific server
-
-```bash
+# List tools from a specific server
 mcp-cli-ent list-tools context7
+
+# Call a tool with arguments
+mcp-cli-ent call-tool context7 resolve-library-id '{"libraryName": "react"}'
+
+# List resources from a server
+mcp-cli-ent list-resources deepwiki
 ```
 
-### Call a tool with arguments
+### 🌐 Browser Automation Workflows
+
+#### Chrome DevTools - Console Access & Debugging
+```bash
+# Navigate to a website (daemon auto-starts if needed)
+mcp-cli-ent call-tool chrome-devtools navigate_page '{"url": "https://wicket.io"}'
+
+# Access browser console messages
+mcp-cli-ent call-tool chrome-devtools list_console_messages
+mcp-cli-ent call-tool chrome-devtools get_console_message '{"msgid": 3}'
+
+# Take snapshots and screenshots
+mcp-cli-ent call-tool chrome-devtools take_snapshot
+mcp-cli-ent call-tool chrome-devtools take_screenshot
+
+# Click elements and interact with page
+mcp-cli-ent call-tool chrome-devtools click '{"uid": "1_31"}'
+```
+
+#### Playwright - Advanced Browser Automation
+```bash
+# Navigate and interact (persistent session across commands)
+mcp-cli-ent call-tool playwright browser_navigate '{"url": "https://antronio.cl"}'
+
+# Take accessibility snapshots for analysis
+mcp-cli-ent call-tool playwright browser_snapshot
+
+# Click on elements and navigate pages
+mcp-cli-ent call-tool playwright browser_click '{
+  "element": "Era que no - CASO SQM: Tras 11 años de litigios...",
+  "ref": "e59"
+}'
+
+# Take screenshots with full page support
+mcp-cli-ent call-tool playwright browser_take_screenshot
+```
+
+#### Multi-Server Persistent Sessions
+```bash
+# Check daemon status - shows all active persistent sessions
+mcp-cli-ent daemon status
+
+# Output example:
+# MCP daemon is running (PID: 12345)
+# Platform: darwin
+# Endpoint: 127.0.0.1:8080
+# Active sessions:
+#   • chrome-devtools (active) [Uptime: 5m12s]
+#   • playwright (active) [Uptime: 3m45s]
+```
+
+### Real-World Examples
 
 ```bash
 # Get HyperPress block building documentation via Context7
-mcp-cli-ent --timeout 60 call-tool context7 get-library-docs '{"context7CompatibleLibraryID": "/estebanforge/hyperpress", "query": "how to build a block"}'
+mcp-cli-ent --timeout 60 call-tool context7 get-library-docs '{
+  "context7CompatibleLibraryID": "/estebanforge/hyperpress",
+  "query": "how to build a block"
+}'
 
-# Use sequential thinking
+# Use sequential thinking for complex problems
 mcp-cli-ent call-tool sequential-thinking sequentialthinking '{
   "thought": "I need to solve this complex problem step by step...",
   "nextThoughtNeeded": true,
@@ -221,15 +320,9 @@ mcp-cli-ent call-tool sequential-thinking sequentialthinking '{
 }'
 ```
 
-### List resources from a server
+### Custom Configuration
 
-```bash
-mcp-cli-ent list-resources deepwiki
-```
-
-### Using a custom configuration file
-
-For custom configurations or testing, you can specify a different file:
+For custom configurations or testing, specify a different file:
 
 ```bash
 mcp-cli-ent --config /path/to/custom.json list-servers
@@ -253,6 +346,7 @@ mcp-cli-ent --verbose list-tools
 
 ## Available Commands
 
+#### Core MCP Operations
 - `list-servers` - List all configured MCP servers
 - `list-tools [server]` - List tools from servers
 - `call-tool <server> <tool> [args]` - Call a specific tool
@@ -260,12 +354,25 @@ mcp-cli-ent --verbose list-tools
 - `create-config [filename]` - Create an example configuration
 - `version` - Show version information
 
+#### Daemon Management
+- `daemon start` - Start the background daemon service
+- `daemon stop` - Stop the running daemon
+- `daemon status` - Display daemon status and active sessions
+- `daemon logs` - View daemon service logs
+
+### Global Options
+- `--config <path>` - Use custom configuration file
+- `--timeout <seconds>` - Set request timeout
+- `--verbose, -v` - Enable verbose output
+- `--help, -h` - Show help information
+
 ## Pre configured MCP Servers
 
 - **Context7** - Library documentation and code snippets
 - **DeepWiki** - GitHub repository documentation
 - **Sequential Thinking** - Problem-solving and planning tool
 - **Chrome DevTools** - Let agents navigate and use Chrome and its dev tools
+- **Playwright** - Cross-browser automation for web testing and scraping
 
 ## Examples
 
@@ -305,6 +412,29 @@ mcp-cli-ent call-tool sequential-thinking sequentialthinking '{
   "nextThoughtNeeded": true,
   "thoughtNumber": 1,
   "totalThoughts": 8
+}'
+```
+
+### 📚 Documentation & Information Gathering
+
+```bash
+# Get library documentation via Context7
+mcp-cli-ent call-tool context7 get-library-docs '{
+  "context7CompatibleLibraryID": "/reactjs/react.dev",
+  "query": "getting started with hooks"
+}'
+
+# Sequential thinking for problem solving
+mcp-cli-ent call-tool sequential-thinking sequentialthinking '{
+  "thought": "I need to analyze this complex API design decision systematically...",
+  "nextThoughtNeeded": true,
+  "thoughtNumber": 1,
+  "totalThoughts": 5
+}'
+
+# Repository documentation via DeepWiki
+mcp-cli-ent call-tool deepwiki read_wiki_structure '{
+  "repoName": "facebook/react"
 }'
 ```
 
