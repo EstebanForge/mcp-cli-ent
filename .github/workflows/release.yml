@@ -218,21 +218,19 @@ jobs:
       - name: Create Release Notes
         run: |
           cat > release_notes.md << 'EOF'
-          # MCP CLI-ENT ${{ env.VERSION }}
+          ## MCP CLI-Ent ${{ env.VERSION }} Release Notes
 
-          ## Installation
-
-          ### Quick Install (Linux/macOS/WSL)
+          Quick Install: Linux/macOS/WSL
           ```bash
           curl -fsSL https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.sh | bash
           ```
 
-          ### Windows PowerShell
+          Quick Install: Windows PowerShell
           ```powershell
           iwr -useb https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.ps1 | iex
           ```
 
-          ## Verification
+          Verification
           ```bash
           mcp-cli-ent --version
           ```
@@ -249,7 +247,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.VERSION }}
-          name: MCP CLI-ENT ${{ env.VERSION }}
+          name: MCP CLI-Ent ${{ env.VERSION }}
           body_path: release_notes.md
           draft: false
           prerelease: false
@@ -264,7 +262,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  
+
       - name: Notify completion
         run: |
           echo "✅ Release ${{ env.VERSION }} created successfully!"

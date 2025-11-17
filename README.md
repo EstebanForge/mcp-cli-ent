@@ -39,7 +39,7 @@ The name **CLI-Ent** embodies this philosophy:
 - **Robust Error Handling**: Clear error messages and proper exit codes
 - **Binary Data Handling**: Intelligent display of images and large data without terminal flooding
 
-### 🚀 Persistent Browser Sessions - Gemini CLI Experience
+### 🚀 Persistent Browser Sessions
 
 MCP CLI-Ent introduces a **complete persistent daemon architecture** that provides Gemini CLI-like session persistence for browser automation:
 
