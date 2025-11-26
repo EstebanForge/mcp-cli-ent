@@ -13,12 +13,12 @@ import (
 
 // Manager manages MCP client sessions
 type Manager struct {
-	sessions      map[string]Session
-	mutex         sync.RWMutex
-	configDir     string
-	sessionsDir   string
-	clientFactory ClientFactory
-	fileStore     *FileStore
+	sessions       map[string]Session
+	mutex          sync.RWMutex
+	configDir      string
+	sessionsDir    string
+	clientFactory  ClientFactory
+	fileStore      *FileStore
 	processManager *ProcessManager
 }
 
@@ -50,7 +50,12 @@ func NewManager(configDir string, clientFactory ClientFactory) (*Manager, error)
 	}
 
 	// Clean up dead sessions on startup
-	go manager.cleanupDeadSessions()
+	go func() {
+		if err := manager.cleanupDeadSessions(); err != nil {
+			// Log error but don't fail initialization
+			_ = err
+		}
+	}()
 
 	return manager, nil
 }
@@ -78,7 +83,10 @@ func (m *Manager) GetSession(serverName string, serverConfig config.ServerConfig
 			return existingSession, nil
 		}
 		// Reattachment failed, continue with creating new session
-		fmt.Printf("Warning: Failed to reattach to existing session for %s: %v\n", serverName, reattachErr)
+		// Only show warning if MCP_VERBOSE environment variable is set
+		if os.Getenv("MCP_VERBOSE") == "true" {
+			fmt.Printf("Warning: Failed to reattach to existing session for %s: %v\n", serverName, reattachErr)
+		}
 	}
 
 	// Create new session
@@ -246,7 +254,7 @@ func (m *Manager) cleanupDeadSessions() error {
 	// Delete dead sessions
 	for _, name := range toDelete {
 		if session := m.sessions[name]; session != nil {
-			session.Stop() // Ignore error
+			_ = session.Stop() // Ignore error
 		}
 		delete(m.sessions, name)
 
@@ -257,7 +265,6 @@ func (m *Manager) cleanupDeadSessions() error {
 
 	return nil
 }
-
 
 // saveSession saves session information to disk
 func (m *Manager) saveSession(session Session) error {
@@ -306,8 +313,8 @@ func (m *Manager) loadSessions() error {
 		// This prevents starting all sessions at startup
 	}
 
-	// Only report if we found sessions to process
-	if validSessions > 0 || invalidSessions > 0 {
+	// Only report if we found sessions to process and verbose mode is enabled
+	if (validSessions > 0 || invalidSessions > 0) && os.Getenv("MCP_VERBOSE") == "true" {
 		fmt.Printf("Session cleanup: %d valid sessions found, %d invalid sessions removed\n", validSessions, invalidSessions)
 	}
 

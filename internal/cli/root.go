@@ -19,12 +19,11 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "mcp-cli",
-	Short: "CLI tool for MCP servers",
-	Long: `mcp-cli is a standalone CLI tool for interacting with MCP (Model Context Protocol) servers.
-It supports both HTTP and stdio-based servers, with configuration compatible with Claude Code and VSCode.
+	Use:   "mcp-cli-ent",
+	Short: "MCP server client",
+	Long: `MCP CLI-Ent: Call MCP tools without loading them into agent context.
 
-Use mcp-cli to call MCP tools without loading them into Claude Code's context.`,
+Use "mcp-cli-ent --help verbose" for detailed information.`,
 	Version: version.Version,
 }
 

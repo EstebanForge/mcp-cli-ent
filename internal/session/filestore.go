@@ -1,8 +1,10 @@
 package session
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,14 +13,14 @@ import (
 
 // FileStore handles file-based session persistence
 type FileStore struct {
-	sessionsDir string
+	sessionsDir    string
 	processManager *ProcessManager
 }
 
 // NewFileStore creates a new file store
 func NewFileStore(sessionsDir string) *FileStore {
 	return &FileStore{
-		sessionsDir:   sessionsDir,
+		sessionsDir:    sessionsDir,
 		processManager: NewProcessManager(),
 	}
 }
@@ -239,11 +241,11 @@ func (fs *FileStore) processesCompatible(expected, actual string) bool {
 
 	// Allow common browser process names
 	browserProcesses := map[string]bool{
-		"chrome": true,
-		"chromium": true,
+		"chrome":        true,
+		"chromium":      true,
 		"google-chrome": true,
-		"msedge": true,
-		"node": true,
+		"msedge":        true,
+		"node":          true,
 	}
 
 	return browserProcesses[expectedBase] && browserProcesses[actualBase]
@@ -260,7 +262,10 @@ func (fs *FileStore) FindExistingSession(serverName string) (*SessionInfo, error
 	// Validate the session
 	if err := fs.ValidateSession(sessionInfo); err != nil {
 		// Session is invalid, delete it
-		fs.DeleteSession(sessionInfo.SessionID)
+		if deleteErr := fs.DeleteSession(sessionInfo.SessionID); deleteErr != nil {
+			// Log deletion error but don't fail the response
+			_ = deleteErr
+		}
 		return nil, fmt.Errorf("existing session is invalid: %w", err)
 	}
 
@@ -307,12 +312,19 @@ func (fs *FileStore) sessionFilename(sessionID string) string {
 	return filepath.Join(fs.sessionsDir, sessionID+".json")
 }
 
-// randomString generates a random string of the given length
+// randomString generates a cryptographically secure random string of the given length
 func randomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, length)
+	charsetLen := big.NewInt(int64(len(charset)))
 	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		n, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			// Fallback to timestamp-based (should rarely happen)
+			b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		} else {
+			b[i] = charset[n.Int64()]
+		}
 	}
 	return string(b)
 }

@@ -27,19 +27,19 @@ func getUnixSocketEndpoint() string {
 
 	// Original Unix socket logic (commented out for testing)
 	/*
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		// Fallback to temp directory
-		return "/tmp/mcp-cli-ent.sock"
-	}
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			// Fallback to temp directory
+			return "/tmp/mcp-cli-ent.sock"
+		}
 
-	daemonDir := filepath.Join(configDir, "mcp-cli-ent")
-	if err := os.MkdirAll(daemonDir, 0755); err != nil {
-		// Fallback to temp directory
-		return "/tmp/mcp-cli-ent.sock"
-	}
+		daemonDir := filepath.Join(configDir, "mcp-cli-ent")
+		if err := os.MkdirAll(daemonDir, 0755); err != nil {
+			// Fallback to temp directory
+			return "/tmp/mcp-cli-ent.sock"
+		}
 
-	return filepath.Join(daemonDir, "daemon.sock")
+		return filepath.Join(daemonDir, "daemon.sock")
 	*/
 }
 

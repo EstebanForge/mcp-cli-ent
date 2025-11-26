@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -17,9 +18,8 @@ import (
 
 // DaemonManager manages the daemon lifecycle
 type DaemonManager struct {
-	configPath string
-	platform   string
-	endpoint   string
+	platform string
+	endpoint string
 }
 
 // NewDaemonManager creates a new daemon manager
@@ -61,7 +61,11 @@ func (dm *DaemonManager) startForeground() error {
 	if err := writePIDFile(); err != nil {
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
-	defer removePIDFile()
+	defer func() {
+		if err := removePIDFile(); err != nil {
+			log.Printf("Warning: Failed to remove PID file: %v", err)
+		}
+	}()
 
 	// Load daemon config
 	daemonConfig := dm.loadDaemonConfig()
@@ -261,10 +265,10 @@ func (dm *DaemonManager) Status() (*DaemonStatus, error) {
 	running, pid, err := isDaemonRunning()
 	if err != nil {
 		return &DaemonStatus{
-			Running:   false,
-			Platform:  dm.platform,
-			Endpoint:  dm.endpoint,
-			Error:     fmt.Sprintf("Failed to check daemon status: %v", err),
+			Running:  false,
+			Platform: dm.platform,
+			Endpoint: dm.endpoint,
+			Error:    fmt.Sprintf("Failed to check daemon status: %v", err),
 		}, nil
 	}
 
@@ -280,11 +284,11 @@ func (dm *DaemonManager) Status() (*DaemonStatus, error) {
 	status, err := dm.getDaemonStatusFromAPI()
 	if err != nil {
 		return &DaemonStatus{
-			Running:   true,
-			PID:       pid,
-			Platform:  dm.platform,
-			Endpoint:  dm.endpoint,
-			Error:     fmt.Sprintf("Failed to get detailed status: %v", err),
+			Running:  true,
+			PID:      pid,
+			Platform: dm.platform,
+			Endpoint: dm.endpoint,
+			Error:    fmt.Sprintf("Failed to get detailed status: %v", err),
 		}, nil
 	}
 
@@ -412,11 +416,13 @@ func (dm *DaemonManager) getDaemonStatusFromAPI() (*DaemonStatus, error) {
 func (dm *DaemonManager) waitForShutdown(daemon *Daemon) {
 	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
-	// signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	log.Printf("Received shutdown signal, stopping daemon...")
-	daemon.Stop()
+	if err := daemon.Stop(); err != nil {
+		log.Printf("Error stopping daemon: %v", err)
+	}
 }
 
 // GetDaemonConfigPath returns the path to the daemon configuration file

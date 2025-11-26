@@ -15,6 +15,7 @@ import (
 	"github.com/mcp-cli-ent/mcp-cli/internal/client"
 	"github.com/mcp-cli-ent/mcp-cli/internal/config"
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
+	"github.com/mcp-cli-ent/mcp-cli/pkg/version"
 )
 
 // Daemon represents the main daemon process
@@ -334,14 +335,14 @@ func (d *Daemon) GetStatus() *DaemonStatus {
 	}
 
 	return &DaemonStatus{
-		Running:       true,
-		StartTime:     d.startTime,
-		Version:       "0.2.0", // TODO: Get from version package
-		SessionCount:  len(d.sessions),
+		Running:        true,
+		StartTime:      d.startTime,
+		Version:        version.Version,
+		SessionCount:   len(d.sessions),
 		ActiveSessions: activeSessions,
-		PID:           d.pid,
-		Endpoint:      d.endpoint,
-		Platform:      d.platform,
+		PID:            d.pid,
+		Endpoint:       d.endpoint,
+		Platform:       d.platform,
 	}
 }
 
@@ -404,7 +405,10 @@ func (d *Daemon) writeJSONResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
-	encoder.Encode(data)
+	if err := encoder.Encode(data); err != nil {
+		// If encoding fails, we can't write a JSON response, so we'll log and write a plain text error
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+	}
 }
 
 // Platform detection helpers

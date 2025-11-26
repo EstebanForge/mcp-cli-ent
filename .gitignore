@@ -97,3 +97,6 @@ RELEASE.md
 mcp-cli-ent
 mcp-cli-ent-*
 
+# cipher directories
+data/
+.cipher/

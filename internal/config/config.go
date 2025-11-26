@@ -1,12 +1,18 @@
 package config
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 )
+
+// Embedded example configuration - keep in sync with root mcp_servers.example.json
+//
+//go:embed mcp_servers.example.json
+var exampleConfigJSON []byte
 
 // GetConfigDir returns the standard configuration directory for the current platform
 func GetConfigDir() (string, error) {
@@ -130,9 +136,11 @@ func LoadConfig(configPath string) (*Configuration, error) {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Resolve environment variables in headers
+	// Resolve environment variables in headers, env, and args
 	for name, server := range config.MCPServers {
 		server.ResolveHeaders()
+		server.ResolveEnv()
+		server.ResolveArgs()
 		config.MCPServers[name] = server
 	}
 
@@ -152,8 +160,8 @@ func FindConfigFile() (string, error) {
 
 	// Fall back to current directory for backward compatibility
 	possiblePaths := []string{
-		"mcp_servers.json",       // Current directory
-		".mcp_servers.json",      // Hidden file in current directory
+		"mcp_servers.json",  // Current directory
+		".mcp_servers.json", // Hidden file in current directory
 	}
 
 	for _, path := range possiblePaths {
@@ -235,44 +243,14 @@ func (c *Configuration) GetServerStatus() []ServerStatus {
 
 // CreateExampleConfig creates an example configuration file
 func CreateExampleConfig(filename string) error {
-	exampleConfig := Configuration{
-		MCPServers: map[string]ServerConfig{
-			"context7": {
-				Type: "http",
-				URL:  "https://mcp.context7.com/mcp",
-				Headers: map[string]string{
-					"CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}",
-				},
-				Timeout: 30,
-			},
-			"sequential-thinking": {
-				Command: "npx",
-				Args:    []string{"-y", "@modelcontextprotocol/server-sequential-thinking"},
-				Timeout: 30,
-			},
-			"deepwiki": {
-				Command: "npx",
-				Args:    []string{"-y", "mcp-remote", "https://mcp.deepwiki.com/sse"},
-				Timeout: 30,
-			},
-		},
-	}
-
-	data, err := json.MarshalIndent(exampleConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal example config: %w", err)
-	}
-
-	// Add newline at the end
-	data = append(data, '\n')
-
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(filename)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	// Write embedded example config to file
+	if err := os.WriteFile(filename, exampleConfigJSON, 0644); err != nil {
 		return fmt.Errorf("failed to write example config: %w", err)
 	}
 

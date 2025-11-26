@@ -12,13 +12,14 @@ import (
 	"github.com/mcp-cli-ent/mcp-cli/internal/client"
 	"github.com/mcp-cli-ent/mcp-cli/internal/config"
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
+	"github.com/mcp-cli-ent/mcp-cli/pkg/version"
 )
 
 // DaemonClient provides communication with the MCP daemon
 type DaemonClient struct {
-	manager     *DaemonManager
-	httpClient  *http.Client
-	autoStart   bool
+	manager    *DaemonManager
+	httpClient *http.Client
+	autoStart  bool
 }
 
 // NewDaemonClient creates a new daemon client
@@ -92,9 +93,14 @@ func (dc *DaemonClient) GetStatus() (*DaemonStatus, error) {
 		return &DaemonStatus{Running: false}, nil
 	}
 
-	data, _ := json.Marshal(apiResp.Data)
+	data, err := json.Marshal(apiResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response data: %w", err)
+	}
 	var status DaemonStatus
-	json.Unmarshal(data, &status)
+	if err := json.Unmarshal(data, &status); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal status: %w", err)
+	}
 
 	return &status, nil
 }
@@ -202,9 +208,14 @@ func (dc *DaemonClient) ListSessions() ([]SessionInfo, error) {
 		return nil, fmt.Errorf("daemon error: %s", apiResp.Error)
 	}
 
-	data, _ := json.Marshal(apiResp.Data)
+	data, err := json.Marshal(apiResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response data: %w", err)
+	}
 	var sessions []SessionInfo
-	json.Unmarshal(data, &sessions)
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal sessions: %w", err)
+	}
 
 	return sessions, nil
 }
@@ -300,7 +311,7 @@ func (dc *DaemonClient) ListTools(serverName string) ([]mcp.Tool, error) {
 // SmartClient provides automatic daemon usage with fallback
 type SmartClient struct {
 	daemonClient *DaemonClient
-	directClient  func(config.ServerConfig) (mcp.MCPClient, error)
+	directClient func(config.ServerConfig) (mcp.MCPClient, error)
 }
 
 // NewSmartClient creates a new smart client
@@ -314,7 +325,7 @@ func NewSmartClient() *SmartClient {
 // ShouldUseDaemon determines if a server should use the daemon
 func (sc *SmartClient) ShouldUseDaemon(serverName string, serverConfig config.ServerConfig) bool {
 	// Don't use daemon if explicitly disabled
-	if serverConfig.Persistent == false {
+	if !serverConfig.Persistent {
 		return false
 	}
 
@@ -324,7 +335,7 @@ func (sc *SmartClient) ShouldUseDaemon(serverName string, serverConfig config.Se
 	}
 
 	// Auto-start daemon for persistent servers
-	if serverConfig.Persistent == true {
+	if serverConfig.Persistent {
 		if err := sc.daemonClient.StartDaemon(); err == nil {
 			return true
 		}
@@ -367,7 +378,7 @@ func (dm *DaemonMCPClient) Initialize(ctx context.Context, params *mcp.Initializ
 		},
 		ServerInfo: mcp.ServerInfo{
 			Name:    "mcp-cli-ent-daemon",
-			Version: "0.2.0",
+			Version: version.Version,
 		},
 	}, nil
 }

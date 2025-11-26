@@ -1,4 +1,4 @@
-.PHONY: build test clean install release fmt lint deps
+.PHONY: build test clean install release fmt lint deps sync-config check-config
 
 # Default target
 all: build
@@ -13,7 +13,7 @@ LDFLAGS=-ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${VERSIO
 RELEASE_LDFLAGS=-ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${RELEASE_VERSION} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${COMMIT} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=${DATE}"
 
 # Build for current platform
-build:
+build: check-config
 	@echo "Building ${BINARY_NAME}..."
 	go build ${LDFLAGS} -o bin/${BINARY_NAME} ./cmd/mcp-cli-ent
 
@@ -96,6 +96,32 @@ lint:
 	@echo "Linting code..."
 	golangci-lint run
 
+# Pre-push validation (replicates GitHub Actions checks)
+pre-push:
+	@echo "Running pre-push validation..."
+	@./scripts/pre-push-check.sh
+
+# Install git pre-push hook
+install-hooks:
+	@echo "Installing git hooks..."
+	@if [ ! -f .git/hooks/pre-push ]; then \
+		echo "#!/bin/bash" > .git/hooks/pre-push; \
+		echo "exec ./scripts/pre-push-check.sh" >> .git/hooks/pre-push; \
+		chmod +x .git/hooks/pre-push; \
+		echo "✅ Pre-push hook installed"; \
+		echo "   Hook will run automatically before each 'git push'"; \
+		echo "   To skip: git push --no-verify"; \
+	else \
+		echo "⚠️  Pre-push hook already exists"; \
+		echo "   Remove .git/hooks/pre-push and run 'make install-hooks' again"; \
+	fi
+
+# Uninstall git pre-push hook
+uninstall-hooks:
+	@echo "Removing git hooks..."
+	@rm -f .git/hooks/pre-push
+	@echo "✅ Pre-push hook removed"
+
 # Download dependencies
 deps:
 	@echo "Downloading dependencies..."
@@ -134,6 +160,17 @@ run-example: build
 	@echo "Running with example config..."
 	./bin/${BINARY_NAME} list-servers
 
+# Sync example config files
+sync-config:
+	@echo "Syncing example config files..."
+	cp mcp_servers.example.json internal/config/mcp_servers.example.json
+	@echo "Example config synced"
+
+# Check if example config files are in sync
+check-config:
+	@echo "Checking if example config files are in sync..."
+	@diff -q mcp_servers.example.json internal/config/mcp_servers.example.json > /dev/null && echo "✓ Config files in sync" || (echo "✗ Config files out of sync! Run 'make sync-config'" && exit 1)
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -144,6 +181,9 @@ help:
 	@echo "  test-coverage  - Run tests with coverage"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Lint code"
+	@echo "  pre-push       - Run pre-push validation (replicates GitHub Actions)"
+	@echo "  install-hooks  - Install git pre-push hook"
+	@echo "  uninstall-hooks- Remove git pre-push hook"
 	@echo "  deps           - Download dependencies"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  install        - Install to GOPATH/bin"
@@ -151,3 +191,5 @@ help:
 	@echo "  set-version    - Set version: make set-version VERSION=1.2.3"
 	@echo "  dev-setup      - Set up development environment"
 	@echo "  run-example    - Build and run with example config"
+	@echo "  sync-config    - Sync root example config to internal/config"
+	@echo "  check-config   - Check if example configs are in sync"

@@ -20,5 +20,5 @@ func String() string {
 
 // PrintVersion prints version information to stdout
 func PrintVersion() {
-	fmt.Printf("mcp-cli %s\n", String())
+	fmt.Printf("mcp-cli-ent %s\n", String())
 }

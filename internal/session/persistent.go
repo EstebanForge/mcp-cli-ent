@@ -17,24 +17,24 @@ type ClientFactory func(config.ServerConfig) (mcp.MCPClient, error)
 
 // PersistentSession represents a persistent MCP client session
 type PersistentSession struct {
-	name         string
-	config       config.ServerConfig
-	sessionType  SessionType
-	status       SessionStatus
-	client       mcp.MCPClient
-	clientFactory ClientFactory
-	fileStore    *FileStore
+	name           string
+	config         config.ServerConfig
+	sessionType    SessionType
+	status         SessionStatus
+	client         mcp.MCPClient
+	clientFactory  ClientFactory
+	fileStore      *FileStore
 	processManager *ProcessManager
-	mutex        sync.RWMutex
-	startTime    time.Time
-	lastActivity time.Time
-	pid          int
-	sessionID    string
-	processPath  string
-	processArgs  []string
+	mutex          sync.RWMutex
+	startTime      time.Time
+	lastActivity   time.Time
+	pid            int
+	sessionID      string
+	processPath    string
+	processArgs    []string
 	connectionInfo *ConnectionInfo
-	endpoints    []string
-	error        string
+	endpoints      []string
+	error          string
 }
 
 // NewPersistentSession creates a new persistent session
@@ -156,8 +156,7 @@ func (s *PersistentSession) Start() error {
 
 	// Try to reattach to existing session if we have session metadata
 	if s.sessionID != "" && s.pid > 0 {
-		var reattachErr error
-		reattachErr = s.tryReattach()
+		reattachErr := s.tryReattach()
 		if reattachErr == nil {
 			// Successfully reattached
 			return nil
@@ -266,42 +265,26 @@ func (s *PersistentSession) createNewSession() error {
 	s.lastActivity = time.Now()
 	s.error = ""
 
-	// Save session metadata to file asynchronously to avoid deadlock
-	go func() {
-		if err := s.saveToStore(); err != nil {
-			fmt.Printf("Warning: Failed to save session metadata: %v\n", err)
-		}
-	}()
+	// Save session metadata to file asynchronously
+	s.saveToStoreAsync()
 
 	return nil
 }
 
-// saveToStore saves session metadata to the file store
-func (s *PersistentSession) saveToStore() error {
+// saveToStoreAsync saves session metadata to the file store asynchronously
+func (s *PersistentSession) saveToStoreAsync() {
 	if s.fileStore == nil {
-		return nil
+		return
 	}
-
-	// Create a copy of session info without holding the lock
-	s.mutex.RLock()
-	sessionInfo := SessionInfo{
-		SessionID:      s.sessionID,
-		Name:           s.name,
-		Type:           s.sessionType,
-		Status:         s.status,
-		PID:            s.pid,
-		ProcessPath:    s.processPath,
-		ProcessArgs:    s.processArgs,
-		ConnectionInfo: s.connectionInfo,
-		StartTime:      s.startTime,
-		LastActivity:   s.lastActivity,
-		Endpoints:      s.endpoints,
-		Error:          s.error,
-		Config:         s.config,
-	}
-	s.mutex.RUnlock()
-
-	return s.fileStore.SaveSession(&sessionInfo)
+	// Capture current session state before spawning goroutine
+	sessionInfo := s.GetInfo()
+	go func() {
+		if err := s.fileStore.SaveSession(&sessionInfo); err != nil {
+			if os.Getenv("MCP_VERBOSE") == "true" {
+				fmt.Printf("Warning: Failed to save session metadata: %v\n", err)
+			}
+		}
+	}()
 }
 
 // Stop stops the session and cleans up resources
@@ -330,13 +313,7 @@ func (s *PersistentSession) Stop() error {
 	s.error = ""
 
 	// Update session metadata in file store asynchronously
-	if s.fileStore != nil {
-		go func() {
-			if err := s.saveToStore(); err != nil {
-				fmt.Printf("Warning: Failed to save session metadata after stop: %v\n", err)
-			}
-		}()
-	}
+	s.saveToStoreAsync()
 
 	return nil
 }
@@ -378,11 +355,7 @@ func (s *PersistentSession) HealthCheck() error {
 		s.mutex.Unlock()
 
 		// Update session metadata asynchronously
-		go func() {
-			if s.fileStore != nil {
-				s.saveToStore()
-			}
-		}()
+		s.saveToStoreAsync()
 
 		return fmt.Errorf("session process (PID %d) is no longer alive", s.pid)
 	}
@@ -426,7 +399,10 @@ func (s *PersistentSession) UpdateActivity() {
 	go func() {
 		if s.fileStore != nil {
 			if err := s.fileStore.UpdateSessionActivity(s.sessionID); err != nil {
-				fmt.Printf("Warning: Failed to update session activity: %v\n", err)
+				// Only show warning if MCP_VERBOSE environment variable is set
+				if os.Getenv("MCP_VERBOSE") == "true" {
+					fmt.Printf("Warning: Failed to update session activity: %v\n", err)
+				}
 			}
 		}
 	}()

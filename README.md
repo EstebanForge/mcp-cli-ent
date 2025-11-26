@@ -130,6 +130,17 @@ mcp-cli-ent create-config
 mcp-cli-ent list-servers
 ```
 
+## Integration with AI Agents
+
+For your agent to understand how to access and use MCP servers, add this to your AGENTS.md or CLAUDE.md:
+
+**MCP Server Integration:**
+```markdown
+To access MCP servers, use the CLI command: `mcp-cli-ent`. Check `mcp-cli-ent --help` for available commands.
+```
+
+This allows your AI agent to interact with MCP servers through the CLI interface without loading server definitions into the context window.
+
 ## Configuration
 
 ### MCP Server Configuration
@@ -166,35 +177,74 @@ The configuration file format is compatible with Claude Code and VSCode:
 {
   "mcpServers": {
     "chrome-devtools": {
+      "enabled": true,
+      "description": "Browser automation: console, navigation, screenshots",
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest", "--isolated"],
       "persistent": true,
       "timeout": 60
     },
     "playwright": {
+      "enabled": false,
+      "description": "Browser automation: elements, snapshots, interactions",
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"],
       "persistent": true,
       "timeout": 60
     },
     "context7": {
-      "type": "http",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
-      },
+      "enabled": false,
+      "description": "Code library docs and snippets",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp", "--api-key", "${ENT_CONTEXT7_API_KEY}"],
       "persistent": false,
       "timeout": 30
     },
     "sequential-thinking": {
+      "enabled": true,
+      "description": "Problem-solving and planning",
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "persistent": false,
       "timeout": 30
     },
     "deepwiki": {
+      "enabled": true,
+      "description": "Repository documentation from public Git repos",
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.deepwiki.com/sse"],
+      "persistent": false,
+      "timeout": 30
+    },
+    "brave-search": {
+      "enabled": false,
+      "description": "Search the web, images, videos, news + AI summaries",
+      "command": "npx",
+      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "http"],
+      "env": {
+        "BRAVE_API_KEY": "${ENT_BRAVE_API_KEY}"
+      },
+      "persistent": false,
+      "timeout": 30
+    },
+    "time": {
+      "enabled": true,
+      "description": "Current time and timezone conversions",
+      "command": "uvx",
+      "args": ["mcp-server-time"],
+      "persistent": false,
+      "timeout": 30
+    },
+    "cipher": {
+      "enabled": false,
+      "description": "Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing",
+      "command": "cipher",
+      "args": ["--mode", "mcp"],
+      "env": {
+        "MCP_SERVER_MODE": "aggregator",
+        "OPENAI_API_KEY": "${ENT_OPENAI_API_KEY}",
+        "ANTHROPIC_API_KEY": "${ENT_ANTHROPIC_API_KEY}"
+      },
       "persistent": false,
       "timeout": 30
     }
@@ -204,12 +254,13 @@ The configuration file format is compatible with Claude Code and VSCode:
 
 ### Configuration Options
 
+- **Description**: Add `"description"` to provide a concise overview of what the server does (displayed in `list-tools` for LLM agents)
 - **HTTP servers**: Use `"type": "http"` or provide `"url"`
 - **Stdio servers**: Use `"command"` and optional `"args"`
 - **Headers**: Add `"headers"` object for HTTP authentication
 - **Environment variables**: Use `"env"` object for stdio servers
-- **Environment substitution**: Use `${VAR_NAME}` in header values
-- **Disable servers**: Set `"disabled": true` to temporarily disable a server
+- **Environment substitution**: Use `${VAR_NAME}` in `args`, `headers`, and `env` values for secure credential management
+- **Enable/Disable servers**: Set `"enabled": false` to temporarily disable a server (defaults to true)
 - **Timeout**: Set `"timeout"` in seconds (default: 30)
 - **Persistent Sessions**: Set `"persistent": true` for browser automation servers (Chrome DevTools, Playwright)
 - **Chrome Isolation**: Automatically use `--isolated` flag for Chrome DevTools to prevent profile conflicts
@@ -219,6 +270,61 @@ The configuration file format is compatible with Claude Code and VSCode:
 ```bash
 mcp-cli-ent create-config
 ```
+
+### Setting Up API Keys with Environment Variables
+
+Several MCP servers require API keys for authentication. MCP CLI-Ent uses environment variable substitution to keep credentials secure and out of configuration files.
+
+**Servers requiring API keys:**
+- **Context7**: `ENT_CONTEXT7_API_KEY`
+- **Brave Search**: `ENT_BRAVE_API_KEY`
+- **Cipher**: `ENT_OPENAI_API_KEY` and `ENT_ANTHROPIC_API_KEY`
+
+**Setting environment variables:**
+
+```bash
+# Linux/macOS/WSL - Add to ~/.bashrc or ~/.zshrc for persistence
+export ENT_CONTEXT7_API_KEY="your_context7_api_key_here"
+export ENT_BRAVE_API_KEY="your_brave_api_key_here"
+export ENT_OPENAI_API_KEY="your_openai_api_key_here"
+export ENT_ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+
+# Or set inline for a single command
+ENT_CONTEXT7_API_KEY="your_key" mcp-cli-ent list-tools context7
+```
+
+```powershell
+# Windows PowerShell - Add to $PROFILE for persistence
+$env:ENT_CONTEXT7_API_KEY = "your_context7_api_key_here"
+$env:ENT_BRAVE_API_KEY = "your_brave_api_key_here"
+$env:ENT_OPENAI_API_KEY = "your_openai_api_key_here"
+$env:ENT_ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
+```
+
+**How it works:**
+
+The configuration uses `${VAR_NAME}` placeholders that get replaced with actual values at runtime:
+
+```json
+{
+  "context7": {
+    "args": ["-y", "@upstash/context7-mcp", "--api-key", "${ENT_CONTEXT7_API_KEY}"]
+  },
+  "brave-search": {
+    "env": {
+      "BRAVE_API_KEY": "${ENT_BRAVE_API_KEY}"
+    }
+  },
+  "cipher": {
+    "env": {
+      "OPENAI_API_KEY": "${ENT_OPENAI_API_KEY}",
+      "ANTHROPIC_API_KEY": "${ENT_ANTHROPIC_API_KEY}"
+    }
+  }
+}
+```
+
+When you run `mcp-cli-ent`, these placeholders are automatically replaced with the environment variable values. Environment variable substitution works in `args`, `env`, and `headers` fields. If an environment variable is not set, the placeholder remains as-is, which will likely cause authentication failures.
 
 ## Usage
 
@@ -481,6 +587,38 @@ The tool includes comprehensive error handling for:
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Security and Build Integrity
+
+### Automated Build Process
+
+**MCP CLI-Ent uses automated, reproducible builds through GitHub Actions to ensure security and integrity:**
+
+- **CI/CD Pipeline**: All public releases are built automatically via GitHub Actions
+- **No Manual Builds**: We never build locally and upload manually - this prevents tampering
+- **Reproducible Builds**: Every build is traceable to specific source code commits
+- **Automated Testing**: Each build passes comprehensive tests, linting, and security checks
+- **Cryptographic Verification**: Release artifacts include SHA256 checksums for verification
+
+### Build Verification
+
+When downloading releases, always verify the integrity:
+
+```bash
+# Verify checksum (provided in release notes)
+sha256sum mcp-cli-ent-linux-amd64
+
+# Should match the checksum from GitHub release
+```
+
+### Build Transparency
+
+- **Source Available**: All builds are generated from the public source code repository
+- **Build Logs**: GitHub Actions provide complete build transparency
+- **Version Tracking**: Each binary includes embedded version, commit hash, and build metadata
+- **Change Detection**: Version information helps detect unauthorized modifications
+
+**Trust, but verify.** Always download from official GitHub releases and verify checksums.
 
 ## License
 

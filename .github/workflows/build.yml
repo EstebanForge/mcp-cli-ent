@@ -110,6 +110,9 @@ jobs:
         go clean -cache
         echo "Workspace cleaned"
 
+    - name: Check config sync
+      run: make check-config
+
     - name: Build binary
       env:
         GOOS: ${{ matrix.goos }}
@@ -125,11 +128,20 @@ jobs:
           FINAL_NAME="mcp-cli-ent-windows-${GOARCH}.exe"
         fi
 
-        LDFLAGS="-ldflags \"-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${VERSION} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${COMMIT} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=${DATE}\""
-
-        # Create fresh dist directory
+        # Create dist directory
         mkdir -p dist
-        eval "go build ${LDFLAGS} -o dist/${FINAL_NAME} ./cmd/mcp-cli-ent"
+
+        # Build using make build (which includes check-config)
+        make build
+
+        # Rename binary for Windows if needed
+        if [ "$GOOS" = "windows" ]; then
+          if [ -f "bin/mcp-cli-ent" ]; then
+            mv bin/mcp-cli-ent bin/${BINARY_NAME}
+          fi
+        fi
+
+        mv bin/${BINARY_NAME} dist/${FINAL_NAME}
 
         echo "Built binary: dist/${FINAL_NAME}"
         ls -la dist/

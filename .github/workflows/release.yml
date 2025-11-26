@@ -57,47 +57,19 @@ jobs:
           args: --timeout=5m
         continue-on-error: true
 
-      - name: Create release directory
-        run: mkdir -p dist
+      - name: Check config sync
+        run: make check-config
 
-      - name: Build Linux AMD64
+      - name: Set release version
         run: |
-          echo "Building Linux AMD64 with version: ${{ env.VERSION }}"
-          GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-linux-amd64 ./cmd/mcp-cli-ent
+          echo "${{ env.VERSION }}" > VERSION
+          echo "Release version set to: ${{ env.VERSION }}"
+
+      - name: Build release binaries
+        run: |
+          echo "Building release binaries with version: ${{ env.VERSION }}"
+          make build-release
           ls -la dist/
-
-      - name: Build Linux ARM64
-        run: |
-          GOOS=linux GOARCH=arm64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-linux-arm64 ./cmd/mcp-cli-ent
-
-      - name: Build macOS AMD64
-        run: |
-          GOOS=darwin GOARCH=amd64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-darwin-amd64 ./cmd/mcp-cli-ent
-
-      - name: Build macOS ARM64
-        run: |
-          GOOS=darwin GOARCH=arm64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-darwin-arm64 ./cmd/mcp-cli-ent
-
-      - name: Build Windows AMD64
-        run: |
-          GOOS=windows GOARCH=amd64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-windows-amd64.exe ./cmd/mcp-cli-ent
-
-      - name: Build Windows ARM64
-        run: |
-          echo "Building Windows ARM64 with version: ${{ env.VERSION }}"
-          GOOS=windows GOARCH=arm64 go build \
-            -ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${{ env.VERSION }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${{ github.sha }} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o dist/mcp-cli-ent-windows-arm64.exe ./cmd/mcp-cli-ent
 
       - name: Verify all binaries created
         run: |

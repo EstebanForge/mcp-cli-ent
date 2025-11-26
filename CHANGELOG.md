@@ -1,5 +1,122 @@
 # Changelog
 
+## [0.3.0] - 2025-11-26
+
+### ✨ Agent Experience Improvements
+
+This release focuses on **optimizing the CLI for AI agent usage** with cleaner output, better context management, and enhanced MCP server ecosystem.
+
+### 🚀 Major Enhancements
+
+#### Agent-Optimized Interface
+- **Concise Help Output** - 60% reduction in help text for minimal context usage
+- **Smart Tool Discovery** - `list-tools` now shows server summary instead of dumping all tools
+- **Verbose-Controlled Warnings** - Session warnings only shown in verbose mode to reduce context pollution
+- **Server Descriptions** - `list-servers` now displays helpful descriptions for each MCP server
+
+#### Enhanced MCP Server Management
+- **Single Source of Truth** - `mcp_servers.example.json` embedded in binary for consistency
+- **Environment Variable Standardization** - All API keys now use `ENT_` prefix to prevent conflicts
+- **Automated Config Sync** - Build process ensures embedded config matches source of truth
+- **Comprehensive Server Ecosystem** - Added Cipher memory layer, Brave Search, Time server
+
+### 🔧 Configuration Improvements
+
+#### Environment Variable Consistency
+```bash
+# New standardized ENT_ prefixed variables
+export ENT_CONTEXT7_API_KEY="your_key"
+export ENT_BRAVE_API_KEY="your_key"
+export ENT_OPENAI_API_KEY="your_key"
+export ENT_ANTHROPIC_API_KEY="your_key"
+```
+
+#### Updated Server Configurations
+- **Cipher** - Memory layer for coding agents (auto-generate AI memories, IDE switching, team sharing)
+- **Brave Search** - Web search with AI summaries
+- **Time MCP Server** - Current time and timezone conversions
+- **Context7** - Updated to npx-based configuration
+- **Removed Deprecated** - GitHub and GitLab MCP servers (deprecated upstream)
+
+#### Build System Enhancements
+- **Config Validation** - `make check-config` ensures embedded config sync
+- **CI/CD Integration** - GitHub Actions now use Makefile targets for consistency
+- **Automated Sync** - `make sync-config` copies example config to embedded location
+
+### 🧠 Memory Layer Integration
+
+#### Cipher MCP Server
+- **Dual Memory Architecture** - System 1 (facts) and System 2 (reasoning) memory
+- **Team Collaboration** - Workspace memory sharing across development teams
+- **Persistent Context** - IDE-agnostic memory that persists across sessions
+- **Cross-Platform Compatibility** - Works with Cursor, Windsurf, Claude Desktop, etc.
+
+### 🎯 Developer Experience
+
+#### Agent-Friendly Output
+```bash
+# Before: Verbose help polluting context
+mcp-cli-ent is a standalone CLI tool for interacting with MCP (Model Context Protocol) servers...
+
+# After: Concise and purposeful
+MCP CLI-Ent: Call MCP tools without loading them into agent context.
+```
+
+#### Enhanced Tool Discovery
+```bash
+# Smart warning when no server specified
+⚠️  Warning: Listing all tools from all enabled servers can be slow.
+Found 7 enabled MCP servers:
+
+  • time - Current time and timezone conversions
+  • cipher - Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing
+  • deepwiki - Repository documentation from public Git repos
+
+💡 Please specify a server name to see its tools:
+  mcp-cli-ent list-tools <server-name>
+```
+
+### 🔒 Security Improvements
+
+#### Namespace Isolation
+- **ENT_ Prefix** - Prevents conflicts with existing environment variables
+- **Clean Configuration** - No hardcoded credentials or API keys
+- **Safe Defaults** - Disabled by default for servers requiring API keys
+
+### 🛠️ Build and CI/CD
+
+#### GitHub Actions Updates
+- **Makefile Integration** - CI now uses `make build-release` and `make build`
+- **Config Sync Validation** - Builds fail if config files are out of sync
+- **Consistent Environment** - Same build process locally and in CI/CD
+
+### 📚 Documentation Updates
+
+#### Configuration Guides
+- **API Keys Section** - Comprehensive guide for setting up API keys
+- **Environment Variables** - Complete documentation of ENT_ prefixed variables
+- **Server Descriptions** - Token-efficient descriptions optimized for LLM context
+- **Migration Guide** - Instructions for updating environment variables
+
+#### Enhanced Examples
+- **Real-World Configurations** - All examples use ENT_ prefixed variables
+- **Server Descriptions** - Each server includes concise, useful descriptions
+- **Best Practices** - Guidelines for production deployment
+
+### 🔧 Technical Improvements
+
+#### Session Management
+- **Verbose-Controlled Logging** - Session cleanup warnings only in verbose mode
+- **Clean Output** - Reduced noise for agent interactions
+- **Better Error Messages** - Clear, actionable feedback
+
+#### Configuration Management
+- **Embedded Configuration** - Single source of truth embedded in binary
+- **Environment Substitution** - Support for `${VAR_NAME}` in args, headers, and env
+- **Validation** - Automatic config validation and helpful error messages
+
+---
+
 ## [0.2.0] - 2025-11-17
 
 ### 🚀 Major Enhancement: Persistent Daemon Architecture

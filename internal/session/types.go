@@ -109,24 +109,24 @@ type Session interface {
 
 // SessionInfo contains metadata about a session
 type SessionInfo struct {
-	SessionID   string        `json:"sessionId"`
-	Name         string        `json:"name"`
-	Type         SessionType   `json:"type"`
-	Status       SessionStatus `json:"status"`
-	PID          int           `json:"pid,omitempty"`
-	ProcessPath  string        `json:"processPath,omitempty"`
-	ProcessArgs  []string      `json:"processArgs,omitempty"`
-	ConnectionInfo *ConnectionInfo `json:"connectionInfo,omitempty"`
-	StartTime    time.Time     `json:"startTime"`
-	LastActivity time.Time     `json:"lastActivity"`
-	Endpoints    []string      `json:"endpoints,omitempty"`
-	Error        string        `json:"error,omitempty"`
-	Config       config.ServerConfig `json:"config"`
+	SessionID      string              `json:"sessionId"`
+	Name           string              `json:"name"`
+	Type           SessionType         `json:"type"`
+	Status         SessionStatus       `json:"status"`
+	PID            int                 `json:"pid,omitempty"`
+	ProcessPath    string              `json:"processPath,omitempty"`
+	ProcessArgs    []string            `json:"processArgs,omitempty"`
+	ConnectionInfo *ConnectionInfo     `json:"connectionInfo,omitempty"`
+	StartTime      time.Time           `json:"startTime"`
+	LastActivity   time.Time           `json:"lastActivity"`
+	Endpoints      []string            `json:"endpoints,omitempty"`
+	Error          string              `json:"error,omitempty"`
+	Config         config.ServerConfig `json:"config"`
 }
 
 // ConnectionInfo contains connection details for session reattachment
 type ConnectionInfo struct {
-	Type  string                 `json:"type"`  // "stdio" or "http"
+	Type  string                 `json:"type"`            // "stdio" or "http"
 	Ports map[string]int         `json:"ports,omitempty"` // For stdio: stdin, stdout, stderr
 	URL   string                 `json:"url,omitempty"`   // For HTTP: endpoint URL
 	Extra map[string]interface{} `json:"extra,omitempty"` // Additional connection metadata
@@ -134,9 +134,9 @@ type ConnectionInfo struct {
 
 // SessionConfig contains session-specific configuration
 type SessionConfig struct {
-	Type       SessionType `json:"type"`
-	AutoStart  bool        `json:"autoStart"`
-	Timeout    int         `json:"timeout"`    // Timeout in seconds
-	MaxIdle    int         `json:"maxIdle"`    // Max idle time in seconds before auto-stop
-	HealthCheck bool       `json:"healthCheck"` // Enable periodic health checks
+	Type        SessionType `json:"type"`
+	AutoStart   bool        `json:"autoStart"`
+	Timeout     int         `json:"timeout"`     // Timeout in seconds
+	MaxIdle     int         `json:"maxIdle"`     // Max idle time in seconds before auto-stop
+	HealthCheck bool        `json:"healthCheck"` // Enable periodic health checks
 }

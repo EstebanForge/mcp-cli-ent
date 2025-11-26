@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/mcp-cli-ent/mcp-cli/internal/client"
 	"github.com/mcp-cli-ent/mcp-cli/internal/config"
@@ -25,19 +26,28 @@ import (
 
 // Global session manager singleton
 var (
-	globalSessionManager *session.Manager
-	sessionManagerOnce sync.Once
-	sessionManagerMutex sync.RWMutex
+	globalSessionManager  *session.Manager
+	sessionManagerOnce    sync.Once
 	sessionManagerInitErr error
+	VerboseMode           bool
 )
 
 var listServersCmd = &cobra.Command{
 	Use:   "list-servers",
-	Short: "List all configured MCP servers",
-	Long: `List all configured MCP servers with their status, type, and configuration details.
-This shows both enabled and disabled servers from the configuration file.`,
+	Short: "List enabled MCP servers",
+	Long: `List enabled MCP servers with their status, type, and configuration details.
+Use --all to include disabled servers.`,
 	RunE: runListServers,
 }
+
+func init() {
+	// Add local flags for list-servers command
+	listServersCmd.Flags().BoolVar(&showAllServers, "all", false, "show disabled servers as well")
+}
+
+var (
+	showAllServers bool
+)
 
 var listToolsCmd = &cobra.Command{
 	Use:   "list-tools [server-name]",
@@ -208,22 +218,22 @@ This will terminate all persistent MCP server connections.`,
 var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show MCP daemon status",
-	Long: `Display the current status of the MCP daemon, including active sessions and system information.`,
-	RunE: runDaemonStatus,
+	Long:  `Display the current status of the MCP daemon, including active sessions and system information.`,
+	RunE:  runDaemonStatus,
 }
 
 var daemonRestartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart the MCP daemon",
-	Long: `Restart the MCP daemon. This will stop all current sessions and start fresh ones.`,
-	RunE: runDaemonRestart,
+	Long:  `Restart the MCP daemon. This will stop all current sessions and start fresh ones.`,
+	RunE:  runDaemonRestart,
 }
 
 var daemonLogsCmd = &cobra.Command{
 	Use:   "logs [--tail <lines>]",
 	Short: "Show MCP daemon logs",
-	Long: `Display the logs from the MCP daemon. Use --tail to show only the last N lines.`,
-	RunE: runDaemonLogs,
+	Long:  `Display the logs from the MCP daemon. Use --tail to show only the last N lines.`,
+	RunE:  runDaemonLogs,
 }
 
 // Daemon flags
@@ -286,35 +296,60 @@ func runListServers(cmd *cobra.Command, args []string) error {
 	// Get server statuses
 	statuses := cfg.GetServerStatus()
 
-	if len(statuses) == 0 {
-		fmt.Println("No MCP servers configured.")
+	// Filter servers based on --all flag
+	var filteredStatuses []config.ServerStatus
+	for _, status := range statuses {
+		if showAllServers || status.Status == "enabled" {
+			filteredStatuses = append(filteredStatuses, status)
+		}
+	}
+
+	if len(filteredStatuses) == 0 {
+		if showAllServers {
+			fmt.Println("No MCP servers configured.")
+		} else {
+			fmt.Println("No enabled MCP servers found.")
+			fmt.Println("Use --all to see disabled servers.")
+		}
 		return nil
 	}
 
-	fmt.Printf("Configured MCP servers (%d):\n", len(statuses))
-	for _, status := range statuses {
+	if showAllServers {
+		fmt.Printf("All configured MCP servers (%d):\n", len(filteredStatuses))
+	} else {
+		fmt.Printf("Enabled MCP servers (%d):\n", len(filteredStatuses))
+	}
+
+	for _, status := range filteredStatuses {
 		statusIcon := "✓"
 		if status.Status == "disabled" {
 			statusIcon = "✗"
 		}
 
-		// Get server config to determine session type
+		// Get server config to determine session type and description
 		serverConfig, exists := cfg.GetServer(status.Name)
 		sessionInfo := ""
+		description := ""
 		if exists {
 			sessionType := session.DetectSessionType(serverConfig)
 			if sessionType == session.Persistent {
-				sessionInfo = fmt.Sprintf(" [persistent]")
+				sessionInfo = " [persistent]"
+			}
+			if serverConfig.Description != "" {
+				description = " - " + serverConfig.Description
 			}
 		}
 
-		fmt.Printf("  %s %s [%s]%s - %s\n", statusIcon, status.Name, status.Status, sessionInfo, status.Details)
+		fmt.Printf("  %s %s [%s]%s%s - %s\n", statusIcon, status.Name, status.Status, sessionInfo, description, status.Details)
 	}
 
 	return nil
 }
 
 func runListTools(cmd *cobra.Command, args []string) error {
+	// Initialize verbose mode to set environment variable
+	_ = isVerbose()
+
 	configPath := getConfigPath()
 
 	// Load configuration
@@ -326,19 +361,31 @@ func runListTools(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	if len(args) == 0 {
-		// List tools from all enabled servers
+		// Show warning and suggest using a specific server
 		enabledServers := cfg.GetEnabledServers()
 		if len(enabledServers) == 0 {
 			fmt.Println("No enabled MCP servers found.")
 			return nil
 		}
 
+		fmt.Println("⚠️  Warning: Listing all tools from all enabled servers can be slow.")
+		fmt.Printf("Found %d enabled MCP servers:\n\n", len(enabledServers))
+
+		// Show server list with descriptions to help user choose
 		for serverName, serverConfig := range enabledServers {
-			fmt.Printf("\n=== %s ===\n", serverName)
-			if err := listToolsFromServer(ctx, serverName, serverConfig); err != nil {
-				fmt.Printf("Error: %v\n", err)
+			if serverConfig.Description != "" {
+				fmt.Printf("  • %s - %s\n", serverName, serverConfig.Description)
+			} else {
+				fmt.Printf("  • %s\n", serverName)
 			}
 		}
+
+		fmt.Println("\n💡 Please specify a server name to see its tools:")
+		fmt.Printf("  %s list-tools <server-name>\n\n", os.Args[0])
+		fmt.Println("Example:")
+		fmt.Printf("  %s list-tools deepwiki\n", os.Args[0])
+
+		return nil
 	} else {
 		// List tools from specific server
 		serverName := args[0]
@@ -351,13 +398,19 @@ func runListTools(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("server '%s' is disabled", serverName)
 		}
 
+		// Display server description if available
+		if serverConfig.Description != "" {
+			fmt.Printf("%s - %s\n\n", serverName, serverConfig.Description)
+		}
+
 		return listToolsFromServer(ctx, serverName, serverConfig)
 	}
-
-	return nil
 }
 
 func listToolsFromServer(ctx context.Context, serverName string, serverConfig config.ServerConfig) error {
+	// Ensure verbose mode is set (called from session management)
+	_ = isVerbose()
+
 	// Create session-aware client factory
 	factory, err := getSessionAwareClientFactory()
 	if err != nil {
@@ -716,8 +769,8 @@ func isBase64Image(s string) bool {
 		if len(decoded) >= 4 {
 			// PNG signature: 89 50 4E 47
 			if len(decoded) >= 8 &&
-			   decoded[0] == 0x89 && decoded[1] == 0x50 &&
-			   decoded[2] == 0x4E && decoded[3] == 0x47 {
+				decoded[0] == 0x89 && decoded[1] == 0x50 &&
+				decoded[2] == 0x4E && decoded[3] == 0x47 {
 				return true
 			}
 			// JPEG signature: FF D8 FF
@@ -726,8 +779,8 @@ func isBase64Image(s string) bool {
 			}
 			// WebP signature: RIFF...WEBP
 			if len(decoded) >= 12 &&
-			   string(decoded[0:4]) == "RIFF" &&
-			   string(decoded[8:12]) == "WEBP" {
+				string(decoded[0:4]) == "RIFF" &&
+				string(decoded[8:12]) == "WEBP" {
 				return true
 			}
 		}
@@ -946,7 +999,7 @@ func runRequestInput(cmd *cobra.Command, args []string) error {
 			"type": "object",
 			"properties": map[string]interface{}{
 				"response": map[string]interface{}{
-					"type": "string",
+					"type":        "string",
 					"description": "Your response",
 				},
 			},
@@ -1048,6 +1101,18 @@ func runCreateMessage(cmd *cobra.Command, args []string) error {
 
 // Session command implementations
 
+// isVerbose returns true if verbose flag is set and updates global VerboseMode
+func isVerbose() bool {
+	VerboseMode = viper.GetBool("verbose")
+	// Set environment variable for session managers to check
+	if VerboseMode {
+		os.Setenv("MCP_VERBOSE", "true")
+	} else {
+		os.Setenv("MCP_VERBOSE", "false")
+	}
+	return VerboseMode
+}
+
 func getSessionManager() (*session.Manager, error) {
 	sessionManagerOnce.Do(func() {
 		configDir, err := config.GetConfigDir()
@@ -1062,17 +1127,13 @@ func getSessionManager() (*session.Manager, error) {
 			return
 		}
 
-		sessionManagerMutex.Lock()
+		// sync.Once.Do provides memory barrier, no mutex needed
 		globalSessionManager = manager
-		sessionManagerMutex.Unlock()
 	})
 
 	if sessionManagerInitErr != nil {
 		return nil, sessionManagerInitErr
 	}
-
-	sessionManagerMutex.RLock()
-	defer sessionManagerMutex.RUnlock()
 
 	if globalSessionManager == nil {
 		return nil, fmt.Errorf("failed to initialize session manager")

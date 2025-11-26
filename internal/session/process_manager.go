@@ -25,11 +25,11 @@ func NewProcessManager() *ProcessManager {
 
 // ProcessInfo contains information about a process
 type ProcessInfo struct {
-	PID       int    `json:"pid"`
-	Executable string `json:"executable"`
-	Args      []string `json:"args"`
-	CmdLine   string `json:"cmdLine"`
-	ParentPID int    `json:"parentPid,omitempty"`
+	PID        int       `json:"pid"`
+	Executable string    `json:"executable"`
+	Args       []string  `json:"args"`
+	CmdLine    string    `json:"cmdLine"`
+	ParentPID  int       `json:"parentPid,omitempty"`
 	CreateTime time.Time `json:"createTime,omitempty"`
 }
 
@@ -57,11 +57,7 @@ func (pm *ProcessManager) isProcessAliveUnix(pid int) bool {
 
 	// Try to signal the process (doesn't actually kill it)
 	err = process.Signal(syscall.Signal(0))
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
 // isProcessAliveWindows checks if process is alive on Windows
@@ -189,11 +185,11 @@ func (pm *ProcessManager) findProcessPs(pid int) (*ProcessInfo, error) {
 	cmdline := strings.Join(fields[2:], " ")
 
 	return &ProcessInfo{
-		PID:       parsedPid,
+		PID:        parsedPid,
 		Executable: fields[2],
-		Args:      fields[2:],
-		CmdLine:   cmdline,
-		ParentPID: ppid,
+		Args:       fields[2:],
+		CmdLine:    cmdline,
+		ParentPID:  ppid,
 		CreateTime: time.Now(), // Best effort
 	}, nil
 }

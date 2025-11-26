@@ -72,12 +72,12 @@ type ListResourcesResult struct {
 
 // CreateMessageRequest represents sampling/createMessage
 type CreateMessageRequest struct {
-	Messages        []Message              `json:"messages"`
+	Messages         []Message              `json:"messages"`
 	ModelPreferences *ModelPreferences      `json:"modelPreferences,omitempty"`
-	SystemPrompt    string                 `json:"systemPrompt,omitempty"`
-	MaxTokens       int                    `json:"maxTokens,omitempty"`
-	StopSequences   []string               `json:"stopSequences,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	SystemPrompt     string                 `json:"systemPrompt,omitempty"`
+	MaxTokens        int                    `json:"maxTokens,omitempty"`
+	StopSequences    []string               `json:"stopSequences,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Message represents a message in sampling request
@@ -88,9 +88,9 @@ type Message struct {
 
 // ModelPreferences represents model selection hints and priorities
 type ModelPreferences struct {
-	Hints               []ModelHint `json:"hints,omitempty"`
-	CostPriority        float64     `json:"costPriority,omitempty"`
-	SpeedPriority       float64     `json:"speedPriority,omitempty"`
+	Hints                []ModelHint `json:"hints,omitempty"`
+	CostPriority         float64     `json:"costPriority,omitempty"`
+	SpeedPriority        float64     `json:"speedPriority,omitempty"`
 	IntelligencePriority float64     `json:"intelligencePriority,omitempty"`
 }
 
@@ -101,12 +101,12 @@ type ModelHint struct {
 
 // CreateMessageResult represents the result of sampling/createMessage
 type CreateMessageResult struct {
-	Role         string                 `json:"role"`
-	Content      Content                `json:"content"`
-	Model        string                 `json:"model,omitempty"`
-	StopReason   string                 `json:"stopReason,omitempty"`
-	TokenUsage   *TokenUsage            `json:"tokenUsage,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Role       string                 `json:"role"`
+	Content    Content                `json:"content"`
+	Model      string                 `json:"model,omitempty"`
+	StopReason string                 `json:"stopReason,omitempty"`
+	TokenUsage *TokenUsage            `json:"tokenUsage,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Content represents message content
@@ -153,11 +153,11 @@ type ListChangedResult struct {
 
 // ServerCapabilities represents server capabilities
 type ServerCapabilities struct {
-	Tools        *ToolsCapability        `json:"tools,omitempty"`
-	Resources    *ResourcesCapability    `json:"resources,omitempty"`
-	Sampling     *SamplingCapability     `json:"sampling,omitempty"`
-	Roots        *RootsCapability        `json:"roots,omitempty"`
-	Elicitation  *ElicitationCapability  `json:"elicit,omitempty"`
+	Tools       *ToolsCapability       `json:"tools,omitempty"`
+	Resources   *ResourcesCapability   `json:"resources,omitempty"`
+	Sampling    *SamplingCapability    `json:"sampling,omitempty"`
+	Roots       *RootsCapability       `json:"roots,omitempty"`
+	Elicitation *ElicitationCapability `json:"elicit,omitempty"`
 }
 
 // ToolsCapability represents tools capability
@@ -167,7 +167,7 @@ type ToolsCapability struct {
 
 // ResourcesCapability represents resources capability
 type ResourcesCapability struct {
-	Subscribe bool   `json:"subscribe,omitempty"`
+	Subscribe   bool `json:"subscribe,omitempty"`
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
@@ -184,7 +184,7 @@ type ElicitationCapability struct{}
 
 // InitializeParams represents initialize request parameters
 type InitializeParams struct {
-	ProtocolVersion string            `json:"protocolVersion"`
+	ProtocolVersion string             `json:"protocolVersion"`
 	Capabilities    ClientCapabilities `json:"capabilities"`
 	ClientInfo      ClientInfo         `json:"clientInfo"`
 }
@@ -204,9 +204,9 @@ type ClientInfo struct {
 
 // InitializeResult represents initialize response
 type InitializeResult struct {
-	ProtocolVersion string              `json:"protocolVersion"`
-	Capabilities    ServerCapabilities  `json:"capabilities"`
-	ServerInfo      ServerInfo          `json:"serverInfo"`
+	ProtocolVersion string             `json:"protocolVersion"`
+	Capabilities    ServerCapabilities `json:"capabilities"`
+	ServerInfo      ServerInfo         `json:"serverInfo"`
 }
 
 // ServerInfo represents server information

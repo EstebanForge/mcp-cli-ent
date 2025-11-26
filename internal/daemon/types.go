@@ -37,15 +37,15 @@ func (s SessionStatus) String() string {
 
 // PersistentSession represents a session managed by the daemon
 type PersistentSession struct {
-	ServerName    string                    `json:"serverName"`
-	Client        mcp.MCPClient             `json:"-"`
-	Status        SessionStatus             `json:"status"`
-	Config        config.ServerConfig       `json:"config"`
-	LastUsed      time.Time                 `json:"lastUsed"`
-	StartTime     time.Time                 `json:"startTime"`
-	Error         string                    `json:"error,omitempty"`
-	ToolCache     map[string][]mcp.Tool     `json:"-"`
-	PID           int                       `json:"pid,omitempty"`
+	ServerName string                `json:"serverName"`
+	Client     mcp.MCPClient         `json:"-"`
+	Status     SessionStatus         `json:"status"`
+	Config     config.ServerConfig   `json:"config"`
+	LastUsed   time.Time             `json:"lastUsed"`
+	StartTime  time.Time             `json:"startTime"`
+	Error      string                `json:"error,omitempty"`
+	ToolCache  map[string][]mcp.Tool `json:"-"`
+	PID        int                   `json:"pid,omitempty"`
 }
 
 // SessionInfo represents session information for API responses
@@ -74,10 +74,10 @@ type DaemonStatus struct {
 
 // APIRequest represents a daemon API request
 type APIRequest struct {
-	Command  string                 `json:"command"`
-	Server   string                 `json:"server,omitempty"`
-	Tool     string                 `json:"tool,omitempty"`
-	Args     map[string]interface{} `json:"args,omitempty"`
+	Command string                 `json:"command"`
+	Server  string                 `json:"server,omitempty"`
+	Tool    string                 `json:"tool,omitempty"`
+	Args    map[string]interface{} `json:"args,omitempty"`
 }
 
 // APIResponse represents a daemon API response
