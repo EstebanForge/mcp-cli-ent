@@ -183,6 +183,12 @@ install_mcp_cli() {
         binary_path="$install_dir\\mcp-cli-ent.exe"
     fi
 
+    # Detect if running interactively
+    local is_interactive=false
+    if [[ -t 0 ]]; then
+        is_interactive=true
+    fi
+
     if [[ -f "$binary_path" ]] && [[ "${SKIP_EXISTING:-}" != "1" ]]; then
         # Get installed version
         local installed_version
@@ -190,27 +196,40 @@ install_mcp_cli() {
 
         if [[ -n "$installed_version" ]] && [[ "$installed_version" == "$version" ]]; then
             warn "MCP CLI $version is already installed at: $binary_path"
-            read -p "Same version detected. Reinstall anyway? [y/N] " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                info "Installation cancelled."
+            if [[ "$is_interactive" == true ]]; then
+                read -p "Same version detected. Reinstall anyway? [y/N] " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Installation cancelled."
+                    exit 0
+                fi
+            else
+                info "Same version detected. Skipping reinstallation."
                 exit 0
             fi
         elif [[ -n "$installed_version" ]]; then
             warn "MCP CLI $installed_version is installed, but latest version is $version"
-            read -p "Upgrade to latest version? [y/N] " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                info "Installation cancelled."
-                exit 0
+            if [[ "$is_interactive" == true ]]; then
+                read -p "Upgrade to latest version? [y/N] " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Installation cancelled."
+                    exit 0
+                fi
+            else
+                info "Auto-upgrading to latest version (non-interactive mode)..."
             fi
         else
             warn "MCP CLI is already installed at: $binary_path (version unknown)"
-            read -p "Do you want to reinstall? [y/N] " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                info "Installation cancelled."
-                exit 0
+            if [[ "$is_interactive" == true ]]; then
+                read -p "Do you want to reinstall? [y/N] " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Installation cancelled."
+                    exit 0
+                fi
+            else
+                info "Auto-reinstalling (non-interactive mode)..."
             fi
         fi
     fi

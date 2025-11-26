@@ -115,6 +115,13 @@ Found 7 enabled MCP servers:
 - **Environment Substitution** - Support for `${VAR_NAME}` in args, headers, and env
 - **Validation** - Automatic config validation and helpful error messages
 
+### 🐛 Bug Fixes
+
+#### Installer Improvements
+- **Non-Interactive Upgrade** - Fixed installer to auto-upgrade when run via `curl | bash`
+- **Interactive Detection** - Properly detects TTY and skips prompts in non-interactive mode
+- **Version Comparison** - Improved version detection and upgrade logic
+
 ---
 
 ## [0.2.0] - 2025-11-17
