@@ -67,6 +67,12 @@ Add to your `CLAUDE.md`:
 To access MCP servers, use the CLI command tool: `mcp-cli-ent`
 ```
 
+Or:
+
+```markdown
+MCP (Model Context Protocol) bridges external tools. Use servers to fetch live docs, perform complex reasoning, or automate browsers. Access via `mcp-cli-ent`
+```
+
 ## Configuration
 
 Create `~/.config/mcp-cli-ent/mcp_servers.json`:
