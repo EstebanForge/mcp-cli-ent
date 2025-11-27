@@ -25,12 +25,56 @@ var rootCmd = &cobra.Command{
 
 Use "mcp-cli-ent --help verbose" for detailed information.`,
 	Version: version.Version,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// If no command was specified, show help with available servers
+		if len(args) == 0 {
+			return showRootHelpWithServers(cmd)
+		}
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+// showRootHelpWithServers displays the root help along with available MCP servers
+func showRootHelpWithServers(cmd *cobra.Command) error {
+	// First show the standard help
+	if err := cmd.Help(); err != nil {
+		return err
+	}
+
+	// Then show available servers
+	fmt.Println()
+	fmt.Println("Available MCP Servers:")
+
+	// Try to load configuration and list enabled servers
+	configPath := GetConfigPath()
+	cfg, err := LoadConfiguration(configPath)
+	if err != nil {
+		fmt.Println("  (No configuration found - run 'mcp-cli-ent create-config' to create one)")
+		return nil
+	}
+
+	enabledServers := cfg.GetEnabledServers()
+	if len(enabledServers) == 0 {
+		fmt.Println("  (No enabled MCP servers found)")
+		return nil
+	}
+
+	for name, serverConfig := range enabledServers {
+		if serverConfig.Description != "" {
+			fmt.Printf("  • %s | %s\n", name, serverConfig.Description)
+		} else {
+			fmt.Printf("  • %s\n", name)
+		}
+	}
+
+	fmt.Println()
+	return nil
 }
 
 func init() {

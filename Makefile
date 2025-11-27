@@ -1,4 +1,4 @@
-.PHONY: build test clean install release fmt lint deps sync-config check-config
+.PHONY: build test test-mcp-servers clean install release fmt lint deps sync-config check-config
 
 # Default target
 all: build
@@ -84,6 +84,11 @@ test-coverage:
 	go test -v -race -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
+
+# Test all MCP servers and CLI commands
+test-mcp-servers:
+	@echo "Testing all MCP servers and CLI commands..."
+	@./scripts/test-mcp-servers.sh
 
 # Format code
 fmt:
@@ -179,6 +184,7 @@ help:
 	@echo "  build-release  - Build for all platforms (release version from VERSION file)"
 	@echo "  test           - Run tests"
 	@echo "  test-coverage  - Run tests with coverage"
+	@echo "  test-mcp-servers - Test all MCP servers and CLI commands"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Lint code"
 	@echo "  pre-push       - Run pre-push validation (replicates GitHub Actions)"

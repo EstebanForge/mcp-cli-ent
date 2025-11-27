@@ -265,21 +265,41 @@ func (s *PersistentSession) createNewSession() error {
 	s.lastActivity = time.Now()
 	s.error = ""
 
+	// Capture session info before releasing the lock to avoid deadlock
+	sessionInfo := s.buildSessionInfo()
+
 	// Save session metadata to file asynchronously
-	s.saveToStoreAsync()
+	s.saveToStoreAsyncWithInfo(&sessionInfo)
 
 	return nil
 }
 
-// saveToStoreAsync saves session metadata to the file store asynchronously
-func (s *PersistentSession) saveToStoreAsync() {
+// buildSessionInfo builds the session info structure (must be called with lock held)
+func (s *PersistentSession) buildSessionInfo() SessionInfo {
+	return SessionInfo{
+		SessionID:      s.sessionID,
+		Name:           s.name,
+		Type:           s.sessionType,
+		Status:         s.status,
+		PID:            s.pid,
+		ProcessPath:    s.processPath,
+		ProcessArgs:    s.processArgs,
+		ConnectionInfo: s.connectionInfo,
+		StartTime:      s.startTime,
+		LastActivity:   s.lastActivity,
+		Endpoints:      s.endpoints,
+		Error:          s.error,
+		Config:         s.config,
+	}
+}
+
+// saveToStoreAsyncWithInfo saves session metadata with pre-captured info (for use with lock held)
+func (s *PersistentSession) saveToStoreAsyncWithInfo(info *SessionInfo) {
 	if s.fileStore == nil {
 		return
 	}
-	// Capture current session state before spawning goroutine
-	sessionInfo := s.GetInfo()
 	go func() {
-		if err := s.fileStore.SaveSession(&sessionInfo); err != nil {
+		if err := s.fileStore.SaveSession(info); err != nil {
 			if os.Getenv("MCP_VERBOSE") == "true" {
 				fmt.Printf("Warning: Failed to save session metadata: %v\n", err)
 			}
@@ -312,8 +332,11 @@ func (s *PersistentSession) Stop() error {
 	s.endpoints = nil
 	s.error = ""
 
+	// Capture session info before releasing the lock to avoid deadlock
+	sessionInfo := s.buildSessionInfo()
+
 	// Update session metadata in file store asynchronously
-	s.saveToStoreAsync()
+	s.saveToStoreAsyncWithInfo(&sessionInfo)
 
 	return nil
 }
@@ -352,10 +375,13 @@ func (s *PersistentSession) HealthCheck() error {
 		s.status = Stopped
 		s.pid = 0
 		s.error = "process terminated"
+
+		// Capture session info before releasing the lock
+		sessionInfo := s.buildSessionInfo()
 		s.mutex.Unlock()
 
 		// Update session metadata asynchronously
-		s.saveToStoreAsync()
+		s.saveToStoreAsyncWithInfo(&sessionInfo)
 
 		return fmt.Errorf("session process (PID %d) is no longer alive", s.pid)
 	}

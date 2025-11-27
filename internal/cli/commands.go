@@ -284,11 +284,34 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
+// displayServerNotFoundError shows available servers when a server name is not found
+func displayServerNotFoundError(serverName string, cfg *config.Configuration) {
+	// Show error with available servers
+	fmt.Fprintf(os.Stderr, "Error: server '%s' not found in configuration\n\n", serverName)
+
+	// Display available servers to help the agent
+	enabledServers := cfg.GetEnabledServers()
+	if len(enabledServers) > 0 {
+		fmt.Fprintf(os.Stderr, "Available MCP servers (%d):\n", len(enabledServers))
+		for name, config := range enabledServers {
+			if config.Description != "" {
+				fmt.Fprintf(os.Stderr, "  • %s | %s\n", name, config.Description)
+			} else {
+				fmt.Fprintf(os.Stderr, "  • %s\n", name)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "\n💡 Use 'mcp-cli-ent list-servers' to see all configured servers\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "No enabled MCP servers found.\n")
+		fmt.Fprintf(os.Stderr, "💡 Run 'mcp-cli-ent create-config' to create a sample configuration\n")
+	}
+}
+
 func runListServers(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -336,11 +359,17 @@ func runListServers(cmd *cobra.Command, args []string) error {
 				sessionInfo = " [persistent]"
 			}
 			if serverConfig.Description != "" {
-				description = " - " + serverConfig.Description
+				description = " | " + serverConfig.Description
 			}
 		}
 
-		fmt.Printf("  %s %s [%s]%s%s - %s\n", statusIcon, status.Name, status.Status, sessionInfo, description, status.Details)
+		// Show status only when --all flag is used (to reduce context pollution by default)
+		var statusLabel string
+		if showAllServers {
+			statusLabel = fmt.Sprintf(" [%s]", status.Status)
+		}
+
+		fmt.Printf("  %s %s%s%s%s | %s\n", statusIcon, status.Name, statusLabel, sessionInfo, description, status.Details)
 	}
 
 	return nil
@@ -350,10 +379,10 @@ func runListTools(cmd *cobra.Command, args []string) error {
 	// Initialize verbose mode to set environment variable
 	_ = isVerbose()
 
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -391,7 +420,8 @@ func runListTools(cmd *cobra.Command, args []string) error {
 		serverName := args[0]
 		serverConfig, exists := cfg.GetServer(serverName)
 		if !exists {
-			return fmt.Errorf("server '%s' not found in configuration", serverName)
+			displayServerNotFoundError(serverName, cfg)
+			return nil
 		}
 
 		if !serverConfig.IsEnabled() {
@@ -459,10 +489,10 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 }
 
 func runCallTool(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -484,7 +514,8 @@ func runCallTool(cmd *cobra.Command, args []string) error {
 	// Get server configuration
 	serverConfig, exists := cfg.GetServer(serverName)
 	if !exists {
-		return fmt.Errorf("server '%s' not found in configuration", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	if !serverConfig.IsEnabled() {
@@ -514,10 +545,10 @@ func runCallTool(cmd *cobra.Command, args []string) error {
 }
 
 func runListResources(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -527,7 +558,8 @@ func runListResources(cmd *cobra.Command, args []string) error {
 	// Get server configuration
 	serverConfig, exists := cfg.GetServer(serverName)
 	if !exists {
-		return fmt.Errorf("server '%s' not found in configuration", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	if !serverConfig.IsEnabled() {
@@ -605,7 +637,7 @@ func runCreateConfig(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getConfigPath() string {
+func GetConfigPath() string {
 	if cfgFile != "" {
 		return cfgFile
 	}
@@ -618,7 +650,7 @@ func getConfigPath() string {
 	return "mcp_servers.json" // Default fallback
 }
 
-func loadConfiguration(configPath string) (*config.Configuration, error) {
+func LoadConfiguration(configPath string) (*config.Configuration, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration from '%s': %w", configPath, err)
@@ -821,10 +853,10 @@ func displayMapStructure(m map[string]interface{}, indent string) {
 }
 
 func runInitialize(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -834,7 +866,8 @@ func runInitialize(cmd *cobra.Command, args []string) error {
 	// Get server configuration
 	serverConfig, exists := cfg.GetServer(serverName)
 	if !exists {
-		return fmt.Errorf("server '%s' not found in configuration", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	if !serverConfig.IsEnabled() {
@@ -888,10 +921,10 @@ func runInitialize(cmd *cobra.Command, args []string) error {
 }
 
 func runListRoots(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -901,7 +934,8 @@ func runListRoots(cmd *cobra.Command, args []string) error {
 	// Get server configuration
 	serverConfig, exists := cfg.GetServer(serverName)
 	if !exists {
-		return fmt.Errorf("server '%s' not found in configuration", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	if !serverConfig.IsEnabled() {
@@ -946,10 +980,10 @@ func runListRoots(cmd *cobra.Command, args []string) error {
 }
 
 func runRequestInput(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -1026,10 +1060,10 @@ func runRequestInput(cmd *cobra.Command, args []string) error {
 }
 
 func runCreateMessage(cmd *cobra.Command, args []string) error {
-	configPath := getConfigPath()
+	configPath := GetConfigPath()
 
 	// Load configuration
-	cfg, err := loadConfiguration(configPath)
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return err
 	}
@@ -1203,15 +1237,16 @@ func runSessionStatus(cmd *cobra.Command, args []string) error {
 	serverName := args[0]
 
 	// Load configuration to check if server exists
-	configPath := getConfigPath()
-	config, err := config.LoadConfig(configPath)
+	configPath := GetConfigPath()
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	serverConfig, exists := config.MCPServers[serverName]
+	serverConfig, exists := cfg.MCPServers[serverName]
 	if !exists {
-		return fmt.Errorf("server not found in configuration: %s", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	manager, err := getSessionManager()
@@ -1258,15 +1293,16 @@ func runSessionStart(cmd *cobra.Command, args []string) error {
 	serverName := args[0]
 
 	// Load configuration
-	configPath := getConfigPath()
-	config, err := config.LoadConfig(configPath)
+	configPath := GetConfigPath()
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	serverConfig, exists := config.MCPServers[serverName]
+	serverConfig, exists := cfg.MCPServers[serverName]
 	if !exists {
-		return fmt.Errorf("server not found in configuration: %s", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	// Check if server supports persistent sessions
@@ -1354,15 +1390,16 @@ func runSessionAttach(cmd *cobra.Command, args []string) error {
 	serverName := args[0]
 
 	// Load configuration to check if server exists
-	configPath := getConfigPath()
-	cfg, err := config.LoadConfig(configPath)
+	configPath := GetConfigPath()
+	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	serverConfig, exists := cfg.MCPServers[serverName]
 	if !exists {
-		return fmt.Errorf("server not found in configuration: %s", serverName)
+		displayServerNotFoundError(serverName, cfg)
+		return nil
 	}
 
 	manager, err := getSessionManager()
