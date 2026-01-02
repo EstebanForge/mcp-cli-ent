@@ -213,7 +213,7 @@ func (dm *DaemonManager) stopGracefully() error {
 	if err != nil {
 		return fmt.Errorf("daemon not responding: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// For now, we'll implement a simple sleep to give the daemon
 	// time to cleanup. In a full implementation, we'd have a
@@ -380,7 +380,7 @@ func (dm *DaemonManager) getDaemonStatusFromAPI() (*DaemonStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("daemon returned status %d", resp.StatusCode)

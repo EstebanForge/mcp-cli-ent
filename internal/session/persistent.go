@@ -206,7 +206,7 @@ func (s *PersistentSession) reattachToHTTPSession() error {
 
 	_, err = client.ListTools(ctx)
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return fmt.Errorf("health check failed during reattachment: %w", err)
 	}
 

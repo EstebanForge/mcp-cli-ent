@@ -26,7 +26,7 @@ func (d *Daemon) startUnixSocket() error {
 
 	// Set socket permissions for security
 	if err := os.Chmod(d.endpoint, 0600); err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
 
@@ -120,7 +120,7 @@ func isDaemonRunning() (bool, int, error) {
 	}
 
 	// Process is dead, remove stale PID file
-	os.Remove(pidFile)
+	_ = os.Remove(pidFile)
 	return false, 0, nil
 }
 

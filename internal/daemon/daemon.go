@@ -99,7 +99,7 @@ func (d *Daemon) Stop() error {
 	for serverName, session := range d.sessions {
 		if session.Client != nil {
 			log.Printf("Stopping session: %s", serverName)
-			session.Client.Close()
+			_ = session.Client.Close()
 		}
 	}
 	d.sessions = make(map[string]*PersistentSession)
@@ -171,7 +171,7 @@ func (d *Daemon) startSessionBackground(session *PersistentSession) {
 
 	_, err = client.ListTools(ctx)
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		d.setSessionError(session.ServerName, fmt.Sprintf("health check failed: %v", err))
 		return
 	}
@@ -211,7 +211,7 @@ func (d *Daemon) StopSession(serverName string) error {
 	session.Status = SessionStatusStopping
 
 	if session.Client != nil {
-		session.Client.Close()
+		_ = session.Client.Close()
 		session.Client = nil
 	}
 
@@ -387,7 +387,7 @@ func (d *Daemon) cleanupIdleSessions() {
 		if now.Sub(session.LastUsed) > maxIdle {
 			log.Printf("Cleaning up idle session: %s", serverName)
 			if session.Client != nil {
-				session.Client.Close()
+				_ = session.Client.Close()
 			}
 			delete(d.sessions, serverName)
 		}

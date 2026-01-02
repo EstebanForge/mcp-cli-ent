@@ -171,7 +171,7 @@ func (m *Manager) StopSession(serverName string) error {
 
 	// Remove session file
 	sessionFile := filepath.Join(m.sessionsDir, serverName+".json")
-	os.Remove(sessionFile) // Ignore error
+	_ = os.Remove(sessionFile) // Ignore error
 
 	// Remove from memory
 	delete(m.sessions, serverName)
@@ -193,7 +193,7 @@ func (m *Manager) StopAllSessions() error {
 
 		// Remove session file
 		sessionFile := filepath.Join(m.sessionsDir, name+".json")
-		os.Remove(sessionFile) // Ignore error
+		_ = os.Remove(sessionFile) // Ignore error
 	}
 
 	// Clear memory
@@ -260,7 +260,7 @@ func (m *Manager) cleanupDeadSessions() error {
 
 		// Remove session file
 		sessionFile := filepath.Join(m.sessionsDir, name+".json")
-		os.Remove(sessionFile) // Ignore error
+		_ = os.Remove(sessionFile) // Ignore error
 	}
 
 	return nil

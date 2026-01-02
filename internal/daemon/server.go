@@ -78,7 +78,7 @@ func (d *Daemon) handleSessionsList(w http.ResponseWriter, r *http.Request) {
 		d.sessionMutex.Lock()
 		for serverName, session := range d.sessions {
 			if session.Client != nil {
-				session.Client.Close()
+				_ = session.Client.Close()
 			}
 			log.Printf("Stopped session: %s", serverName)
 		}

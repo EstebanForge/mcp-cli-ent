@@ -73,7 +73,7 @@ func (dc *DaemonClient) GetStatus() (*DaemonStatus, error) {
 	if err != nil {
 		return &DaemonStatus{Running: false}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return &DaemonStatus{Running: false}, nil
@@ -130,7 +130,7 @@ func (dc *DaemonClient) StartSession(serverName string, serverConfig config.Serv
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -164,7 +164,7 @@ func (dc *DaemonClient) StopSession(serverName string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -193,7 +193,7 @@ func (dc *DaemonClient) ListSessions() ([]SessionInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("daemon returned status %d", resp.StatusCode)
@@ -245,7 +245,7 @@ func (dc *DaemonClient) CallTool(serverName, toolName string, args map[string]in
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -284,7 +284,7 @@ func (dc *DaemonClient) ListTools(serverName string) ([]mcp.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("daemon returned status %d", resp.StatusCode)

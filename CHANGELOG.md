@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0] - 2026-01-02
+
+### 🔧 Bug Fixes
+
+- **Resolved Linting Issues**: Fixed 25+ unchecked return value (errcheck) warnings across the codebase to improve reliability and follow Go best practices.
+- **Improved Cleanup Safety**: Explicitly ignored errors for `Close()` and `os.Remove()` calls in cleanup routines.
+- **Enhanced Environment Handling**: Fixed unchecked `os.Setenv()` return values in verbose mode initialization.
+
+---
+
 ## [0.4.0] - 2025-11-27
 
 ### 🔧 Critical Bug Fixes & Agent Experience

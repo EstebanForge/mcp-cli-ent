@@ -263,7 +263,7 @@ func (c *HTTPClient) NotifyRootsListChanged(roots []mcp.Root) error {
 	if err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return nil
 }
@@ -301,7 +301,7 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)

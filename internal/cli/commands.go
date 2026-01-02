@@ -452,7 +452,7 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// List tools
 	tools, err := mcpClient.ListTools(ctx)
@@ -530,7 +530,7 @@ func runCallTool(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// Call tool
 	ctx := context.Background()
@@ -577,7 +577,7 @@ func runListResources(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// List resources
 	ctx := context.Background()
@@ -885,7 +885,7 @@ func runInitialize(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// Initialize connection
 	ctx := context.Background()
@@ -953,7 +953,7 @@ func runListRoots(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// List roots
 	ctx := context.Background()
@@ -1011,7 +1011,7 @@ func runRequestInput(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// Prepare parameters
 	params := &mcp.RequestInputParams{}
@@ -1091,7 +1091,7 @@ func runCreateMessage(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	// Prepare request
 	request := &mcp.CreateMessageRequest{}
@@ -1140,9 +1140,9 @@ func isVerbose() bool {
 	VerboseMode = viper.GetBool("verbose")
 	// Set environment variable for session managers to check
 	if VerboseMode {
-		os.Setenv("MCP_VERBOSE", "true")
+		_ = os.Setenv("MCP_VERBOSE", "true")
 	} else {
-		os.Setenv("MCP_VERBOSE", "false")
+		_ = os.Setenv("MCP_VERBOSE", "false")
 	}
 	return VerboseMode
 }
@@ -1571,7 +1571,7 @@ func runDaemonLogs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read all content first to determine tail
 	content, err := io.ReadAll(file)

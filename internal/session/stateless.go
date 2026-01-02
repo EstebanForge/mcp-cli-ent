@@ -101,7 +101,7 @@ func (s *StatelessSession) HealthCheck() error {
 	if client == nil {
 		return fmt.Errorf("failed to create client for health check")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Perform a simple health check by listing tools
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

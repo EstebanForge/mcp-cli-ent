@@ -50,14 +50,14 @@ func NewStdioClient(command string, args []string, env map[string]string) (*Stdi
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		stdin.Close()
-		stdout.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
@@ -72,7 +72,7 @@ func NewStdioClient(command string, args []string, env map[string]string) (*Stdi
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
@@ -320,13 +320,13 @@ func (c *StdioClient) Close() error {
 
 	// Close pipes
 	if c.stdin != nil {
-		c.stdin.Close()
+		_ = c.stdin.Close()
 	}
 	if c.stdout != nil {
-		c.stdout.Close()
+		_ = c.stdout.Close()
 	}
 	if c.stderr != nil {
-		c.stderr.Close()
+		_ = c.stderr.Close()
 	}
 
 	// Terminate the process
