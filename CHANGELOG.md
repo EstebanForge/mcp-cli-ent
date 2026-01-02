@@ -2,6 +2,10 @@
 
 ## [0.5.0] - 2026-01-02
 
+### ✨ New Features
+
+- **Homebrew Installation**: Added support for installing via Homebrew using `brew install EstebanForge/tap/mcp-cli-ent`.
+
 ### 🔧 Bug Fixes
 
 - **Resolved Linting Issues**: Fixed 25+ unchecked return value (errcheck) warnings across the codebase to improve reliability and follow Go best practices.

@@ -51,7 +51,7 @@ func (f *SessionAwareClientFactory) CreateClient(serverName string, serverConfig
 			// Check for browser profile conflicts and provide helpful message
 			if strings.Contains(err.Error(), "browser is already running") ||
 				strings.Contains(err.Error(), "chrome-profile") {
-				return nil, fmt.Errorf("browser profile conflict: %s\n\nSuggestion: Run './mcp-cli-ent session cleanup' to clean up old sessions, or try again in a few moments", err.Error())
+				return nil, fmt.Errorf("browser profile conflict: %s\n\nSuggestion: Run 'mcp-cli-ent session cleanup' to clean up old sessions, or try again in a few moments", err.Error())
 			}
 			return nil, fmt.Errorf("failed to start session: %w", err)
 		}

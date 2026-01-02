@@ -18,6 +18,12 @@ Access MCP servers without loading them into your agent's context window.
 
 ## Quick Install
 
+**Homebrew (macOS & Linux):**
+
+```bash
+brew install EstebanForge/tap/mcp-cli-ent
+```
+
 **Linux, macOS & Windows WSL:**
 
 ```bash
