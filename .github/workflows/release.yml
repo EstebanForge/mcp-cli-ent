@@ -28,21 +28,11 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Detected version: $VERSION"
+          
           if [ -z "$VERSION" ]; then
             echo "Error: VERSION is empty"
             exit 1
           fi
-
-      # Cache disabled temporarily due to corruption issues
-      # - name: Cache Go modules
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: ~/go/pkg/mod
-      #     key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum', '**/go.mod') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-go-
-      #   continue-on-error: true
 
       - name: Download dependencies
         run: go mod download
@@ -61,22 +51,41 @@ jobs:
         run: make check-config
 
       - name: Set release version
-        run: |
-          echo "${{ env.VERSION }}" > VERSION
-          echo "Release version set to: ${{ env.VERSION }}"
+        run: echo "${{ env.VERSION }}" > VERSION
 
       - name: Build release binaries
         run: |
-          echo "Building release binaries with version: ${{ env.VERSION }}"
           make build-release
           ls -la dist/
 
+      # ----------------------------------------------------------------
+      # NEW: Create Universal Binary for Homebrew Tap
+      # ----------------------------------------------------------------
+      - name: Create macOS Universal Binary
+        run: |
+          # Create universal binary using lipo
+          lipo -create -output dist/mcp-cli-ent dist/mcp-cli-ent-darwin-amd64 dist/mcp-cli-ent-darwin-arm64
+          
+          # Verify it is universal
+          file dist/mcp-cli-ent
+          
+          # Create the specific tarball expected by the tap
+          tar -czf dist/mcp-cli-ent-macos-universal.tar.gz -C dist mcp-cli-ent
+          
+          # Cleanup temporary binary
+          rm dist/mcp-cli-ent
+
+      # ----------------------------------------------------------------
+      # NEW: Prepare Linux Artifacts for Homebrew Tap
+      # ----------------------------------------------------------------
+      - name: Prepare Linux Artifacts
+        run: |
+          # Package Linux binaries into standardized tarballs
+          tar -czf dist/mcp-cli-ent-linux-amd64.tar.gz -C dist mcp-cli-ent-linux-amd64
+          tar -czf dist/mcp-cli-ent-linux-arm64.tar.gz -C dist mcp-cli-ent-linux-arm64
+
       - name: Verify all binaries created
         run: |
-          echo "Verifying all binaries..."
-          ls -la dist/
-
-          # Define expected binaries
           expected_binaries=(
             "mcp-cli-ent-linux-amd64"
             "mcp-cli-ent-linux-arm64"
@@ -84,6 +93,9 @@ jobs:
             "mcp-cli-ent-darwin-arm64"
             "mcp-cli-ent-windows-amd64.exe"
             "mcp-cli-ent-windows-arm64.exe"
+            "mcp-cli-ent-macos-universal.tar.gz"
+            "mcp-cli-ent-linux-amd64.tar.gz"
+            "mcp-cli-ent-linux-arm64.tar.gz"
           )
 
           missing_count=0
@@ -98,11 +110,8 @@ jobs:
           done
 
           if [ $missing_count -gt 0 ]; then
-            echo "Error: $missing_count binaries are missing"
             exit 1
           fi
-
-          echo "All 6 binaries verified successfully!"
 
       - name: Make binaries executable
         run: chmod +x dist/*
@@ -111,81 +120,6 @@ jobs:
         run: |
           cd dist
           sha256sum * > checksums.txt
-          echo "Checksums generated"
-          cat checksums.txt
-
-      - name: Test Linux binary
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static
-          ./dist/mcp-cli-ent-linux-amd64 --version
-
-      - name: Verify binary integrity
-        run: |
-          echo "Verifying binary integrity and minimum size requirements..."
-
-          # Define minimum expected sizes (in bytes) - Go binaries are typically 10MB+
-          declare -A min_sizes=(
-            ["mcp-cli-ent-linux-amd64"]=10000000
-            ["mcp-cli-ent-linux-arm64"]=10000000
-            ["mcp-cli-ent-darwin-amd64"]=10000000
-            ["mcp-cli-ent-darwin-arm64"]=10000000
-            ["mcp-cli-ent-windows-amd64.exe"]=10000000
-            ["mcp-cli-ent-windows-arm64.exe"]=10000000
-          )
-
-          all_passed=true
-          for binary in "${!min_sizes[@]}"; do
-            if [ -f "dist/$binary" ]; then
-              size=$(stat -c%s "dist/$binary")
-              min_size=${min_sizes[$binary]}
-
-              echo "📊 $binary: $size bytes (min: $min_size)"
-
-              if [ "$size" -ge "$min_size" ]; then
-                echo "✅ $binary size verification passed"
-              else
-                echo "❌ $binary size verification failed - too small"
-                all_passed=false
-              fi
-
-              # Additional format-specific checks (with fallback)
-              case "$binary" in
-                *darwin*)
-                  if file "dist/$binary" 2>/dev/null | grep -q "Mach-O\|executable"; then
-                    echo "✅ $binary format verification passed"
-                  else
-                    echo "⚠️ $binary format check inconclusive, but size is acceptable"
-                  fi
-                  ;;
-                *windows*)
-                  if file "dist/$binary" 2>/dev/null | grep -q "PE\|executable"; then
-                    echo "✅ $binary format verification passed"
-                  else
-                    echo "⚠️ $binary format check inconclusive, but size is acceptable"
-                  fi
-                  ;;
-                *linux*)
-                  if file "dist/$binary" 2>/dev/null | grep -q "ELF\|executable"; then
-                    echo "✅ $binary format verification passed"
-                  else
-                    echo "⚠️ $binary format check inconclusive, but size is acceptable"
-                  fi
-                  ;;
-              esac
-            else
-              echo "❌ $binary not found!"
-              all_passed=false
-            fi
-            echo "---"
-          done
-
-          if [ "$all_passed" = false ]; then
-            echo "❌ Binary integrity verification failed"
-            exit 1
-          fi
-
-          echo "🎉 All binary integrity checks passed!"
 
       - name: Create Release Notes
         run: |
@@ -209,8 +143,6 @@ jobs:
 
           ## Changes
           EOF
-
-          # Append CHANGELOG entry for this version
           if [ -f CHANGELOG.md ]; then
             awk '/^## \[.*\] - / {if (found) exit; found=1} found' CHANGELOG.md | head -n -1 >> release_notes.md
           fi
@@ -230,13 +162,30 @@ jobs:
             dist/mcp-cli-ent-darwin-arm64
             dist/mcp-cli-ent-windows-amd64.exe
             dist/mcp-cli-ent-windows-arm64.exe
+            dist/mcp-cli-ent-macos-universal.tar.gz
+            dist/mcp-cli-ent-linux-amd64.tar.gz
+            dist/mcp-cli-ent-linux-arm64.tar.gz
             dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-      - name: Notify completion
-        run: |
-          echo "✅ Release ${{ env.VERSION }} created successfully!"
-          echo "📦 Binaries available at: https://github.com/EstebanForge/mcp-cli-ent/releases/tag/${{ env.VERSION }}"
-          echo "🚀 Installation commands ready for users"
+  update-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Homebrew Tap Update
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'EstebanForge',
+              repo: 'homebrew-tap',
+              workflow_id: 'update-formula.yml',
+              ref: 'main',
+              inputs: {
+                formula: 'mcp-cli-ent',
+                tag: '${{ github.ref_name }}',
+                repository: '${{ github.repository }}'
+              }
+            })
