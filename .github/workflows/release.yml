@@ -138,26 +138,7 @@ jobs:
 
       - name: Create Release Notes
         run: |
-          cat > release_notes.md << 'EOF'
-          ## MCP CLI-Ent ${{ env.VERSION }} Release Notes
-
-          Quick Install: Linux/macOS/WSL
-          ```bash
-          curl -fsSL https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.sh | bash
-          ```
-
-          Quick Install: Windows PowerShell
-          ```powershell
-          iwr -useb https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.ps1 | iex
-          ```
-
-          Verification
-          ```bash
-          mcp-cli-ent --version
-          ```
-
-          ## Changes
-          EOF
+          printf "## MCP CLI-Ent %s Release Notes\n\nQuick Install: Linux/macOS/WSL\n```bash\ncurl -fsSL https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.sh | bash\n```\n\nQuick Install: Windows PowerShell\n```powershell\niwr -useb https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.ps1 | iex\n```\n\nVerification\n```bash\nmcp-cli-ent --version\n```\n\n## Changes\n" "${{ env.VERSION }}" > release_notes.md
           if [ -f CHANGELOG.md ]; then
             awk '/^## \[.*\] - / {if (found) exit; found=1} found' CHANGELOG.md | head -n -1 >> release_notes.md
           fi
