@@ -1,12 +1,14 @@
 # Changelog
 
+All notable changes to MCP CLI-Ent will be documented in this file.
+
 ## [0.5.0] - 2026-01-02
 
-### ✨ New Features
+### Added
 
 - **Homebrew Installation**: Added support for installing via Homebrew using `brew install EstebanForge/tap/mcp-cli-ent`.
 
-### 🔧 Bug Fixes
+### Fixed
 
 - **Resolved Linting Issues**: Fixed 25+ unchecked return value (errcheck) warnings across the codebase to improve reliability and follow Go best practices.
 - **Improved Cleanup Safety**: Explicitly ignored errors for `Close()` and `os.Remove()` calls in cleanup routines.
@@ -16,18 +18,18 @@
 
 ## [0.4.0] - 2025-11-27
 
-### 🔧 Critical Bug Fixes & Agent Experience
+### Fixed
 
 This release addresses **critical stability issues** and significantly improves the agent experience with better error handling, enhanced output formatting, and a comprehensive test suite.
 
-### ✨ New Features
+### Added
 
 #### Improved Output Formatting
 - **Pipe-delimited output** in `list-servers` command for better clarity
 - **Reduced context pollution**: Default view no longer shows `[enabled]` labels
 - **Context-aware status display**:
-  - **Default view**: `✓ server-name | Description | command` (clean, minimal)
-  - **With `--all` flag**: `✓ server-name [enabled] | Description | command` (shows status)
+  - **Default view**: `OK server-name | Description | command` (clean, minimal)
+  - **With `--all` flag**: `OK server-name [enabled] | Description | command` (shows status)
 - **Benefit**: Cleaner output by default, full visibility when needed with `--all` flag
 
 #### Status Display Logic
@@ -44,13 +46,13 @@ This release addresses **critical stability issues** and significantly improves 
     [list of 13 commands]
 
   Available MCP Servers:
-    • chrome-devtools | Browser automation: console, navigation, screenshots
-    • sequential-thinking | Problem-solving and planning
-    • deepwiki | Repository documentation from public Git repos
+    - chrome-devtools | Browser automation: console, navigation, screenshots
+    - sequential-thinking | Problem-solving and planning
+    - deepwiki | Repository documentation from public Git repos
   ```
 - **Benefit**: Immediate server discovery for agents, reduced context switching
 
-### 🐛 Major Fixes
+### Fixed
 
 #### Deadlock Resolution in Session Management
 - **Fixed goroutine deadlock** in `persistent.go` that caused `list-tools sequential-thinking` and other commands to hang indefinitely
@@ -64,13 +66,13 @@ This release addresses **critical stability issues** and significantly improves 
 - **Helpful suggestions**: Error messages now include actionable guidance (e.g., "Use 'mcp-cli-ent list-servers' to see all configured servers")
 - **Consistent behavior**: Applied across 9 commands: `call-tool`, `list-tools`, `list-resources`, `list-roots`, `initialize`, `request-input`, `create-message`, `session status`, and `session start`
 
-### 📊 Before vs After Error Messages
+### Before vs After Error Messages
 
 **Before (v0.3.0):**
 ```
 Error: server 'think-tool' not found in configuration
-Error:              ← Empty, pollutes LLM context
-Error:              ← Empty, pollutes LLM context
+Error:              <- Empty, pollutes LLM context
+Error:              <- Empty, pollutes LLM context
 ```
 
 **After (v0.4.0):**
@@ -78,15 +80,15 @@ Error:              ← Empty, pollutes LLM context
 Error: server 'think-tool' not found in configuration
 
 Available MCP servers (4):
-  • sequential-thinking | Problem-solving and planning
-  • deepwiki | Repository documentation from public Git repos
-  • time | Current time and timezone conversions
-  • chrome-devtools | Browser automation: console, navigation, screenshots
+  - sequential-thinking | Problem-solving and planning
+  - deepwiki | Repository documentation from public Git repos
+  - time | Current time and timezone conversions
+  - chrome-devtools | Browser automation: console, navigation, screenshots
 
-💡 Use 'mcp-cli-ent list-servers' to see all configured servers
+Note: Use 'mcp-cli-ent list-servers' to see all configured servers
 ```
 
-### 🧪 Comprehensive Test Suite
+### Added
 
 #### New Test Script: `test-mcp-servers.sh`
 - **End-to-end validation** of all example MCP servers from `mcp_servers.example.json`
@@ -108,7 +110,7 @@ Available MCP servers (4):
 make test-mcp-servers  # Run full test suite
 ```
 
-### 🏗️ Code Quality Improvements
+### Improved
 
 #### DRY Principle Implementation
 - **Extracted `displayServerNotFoundError()`**: Single reusable helper for all server-not-found errors
@@ -121,27 +123,27 @@ make test-mcp-servers  # Run full test suite
 - **Split concerns**: Separate functions for capturing vs saving session info
 - **Race condition prevention**: Ensures no nested mutex acquisition in async operations
 
-### ✨ Enhanced Developer Experience
+### Enhanced Developer Experience
 
 #### Test Results Reporting
 ```
 Test Summary
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+------------------------------
 
 Total Tests: 18
 Passed: 18
 Failed: 0
 Pass Rate: 100%
 
-🎉 All tests passed!
+ All tests passed!
 ```
 
 #### Network-Adaptive Testing
 - Servers that require network access (deepwiki, time) are tested but failures don't cause test failures
-- Clear messaging: "⏭️  Server may require network access - skipped"
+- Clear messaging: "Skipped:  Server may require network access - skipped"
 - Enables testing in CI/CD environments without external dependencies
 
-### 🔍 Technical Details
+### Technical Details
 
 #### Deadlock Analysis
 The deadlock occurred in this call chain:
@@ -149,7 +151,7 @@ The deadlock occurred in this call chain:
 2. Calls `createNewSession()` (line 169)
 3. Calls `saveToStoreAsync()` (line 269)
 4. Calls `GetInfo()` trying to acquire **read lock** (line 280)
-5. **Deadlock!** ❌ Cannot acquire read lock while write lock held
+5. **Deadlock!** FAIL Cannot acquire read lock while write lock held
 
 #### The Fix
 ```go
@@ -160,30 +162,30 @@ sessionInfo := s.buildSessionInfo()
 s.saveToStoreAsyncWithInfo(&sessionInfo)
 ```
 
-### 📋 Validation Results
+### Validation Results
 
 #### Pre-Release Testing (v0.4.0)
-✅ All 18 tests passing (100% pass rate)
-✅ No deadlocks on any MCP server
-✅ Clean error messages without context pollution
-✅ All CLI commands functional
-✅ Session management working correctly
-✅ Configuration handling validated
+OK All 18 tests passing (100% pass rate)
+OK No deadlocks on any MCP server
+OK Clean error messages without context pollution
+OK All CLI commands functional
+OK Session management working correctly
+OK Configuration handling validated
 
 #### Tested MCP Servers
-- **chrome-devtools** - Browser automation with console, navigation, screenshots ✅
-- **sequential-thinking** - Problem-solving and planning ✅
-- **deepwiki** - Repository documentation ✅
-- **time** - Current time and timezone conversions ✅
+- **chrome-devtools** - Browser automation with console, navigation, screenshots OK
+- **sequential-thinking** - Problem-solving and planning OK
+- **deepwiki** - Repository documentation OK
+- **time** - Current time and timezone conversions OK
 
-### 🛠️ Build System Enhancements
+### Build System Enhancements
 
 #### Updated Makefile Targets
 - **Added `test-mcp-servers`**: Full end-to-end testing with `make test-mcp-servers`
 - **Comprehensive help**: Updated help text includes new test target
 - **CI/CD Integration**: Ready for integration into release pipeline
 
-### 🎯 Impact Summary
+### Summary
 
 **For Agents:**
 - No more hanging on any command (deadlock eliminated)
@@ -201,11 +203,11 @@ s.saveToStoreAsyncWithInfo(&sessionInfo)
 
 ## [0.3.0] - 2025-11-26
 
-### ✨ Agent Experience Improvements
+### Improved
 
 This release focuses on **optimizing the CLI for AI agent usage** with cleaner output, better context management, and enhanced MCP server ecosystem.
 
-### 🚀 Major Enhancements
+### Added
 
 #### Agent-Optimized Interface
 - **Concise Help Output** - 60% reduction in help text for minimal context usage
@@ -219,7 +221,7 @@ This release focuses on **optimizing the CLI for AI agent usage** with cleaner o
 - **Automated Config Sync** - Build process ensures embedded config matches source of truth
 - **Comprehensive Server Ecosystem** - Added Cipher memory layer, Brave Search, Time server
 
-### 🔧 Configuration Improvements
+### Improved
 
 #### Environment Variable Consistency
 ```bash
@@ -242,7 +244,7 @@ export ENT_ANTHROPIC_API_KEY="your_key"
 - **CI/CD Integration** - GitHub Actions now use Makefile targets for consistency
 - **Automated Sync** - `make sync-config` copies example config to embedded location
 
-### 🧠 Memory Layer Integration
+### Memory Layer Integration
 
 #### Cipher MCP Server
 - **Dual Memory Architecture** - System 1 (facts) and System 2 (reasoning) memory
@@ -250,7 +252,7 @@ export ENT_ANTHROPIC_API_KEY="your_key"
 - **Persistent Context** - IDE-agnostic memory that persists across sessions
 - **Cross-Platform Compatibility** - Works with Cursor, Windsurf, Claude Desktop, etc.
 
-### 🎯 Developer Experience
+### Developer Experience
 
 #### Agent-Friendly Output
 ```bash
@@ -264,32 +266,32 @@ MCP CLI-Ent: Call MCP tools without loading them into agent context.
 #### Enhanced Tool Discovery
 ```bash
 # Smart warning when no server specified
-⚠️  Warning: Listing all tools from all enabled servers can be slow.
+Warning:  Warning: Listing all tools from all enabled servers can be slow.
 Found 7 enabled MCP servers:
 
-  • time - Current time and timezone conversions
-  • cipher - Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing
-  • deepwiki - Repository documentation from public Git repos
+  - time - Current time and timezone conversions
+  - cipher - Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing
+  - deepwiki - Repository documentation from public Git repos
 
-💡 Please specify a server name to see its tools:
+Note: Please specify a server name to see its tools:
   mcp-cli-ent list-tools <server-name>
 ```
 
-### 🔒 Security Improvements
+### Security Improvements
 
 #### Namespace Isolation
 - **ENT_ Prefix** - Prevents conflicts with existing environment variables
 - **Clean Configuration** - No hardcoded credentials or API keys
 - **Safe Defaults** - Disabled by default for servers requiring API keys
 
-### 🛠️ Build and CI/CD
+### Build and CI/CD
 
 #### GitHub Actions Updates
 - **Makefile Integration** - CI now uses `make build-release` and `make build`
 - **Config Sync Validation** - Builds fail if config files are out of sync
 - **Consistent Environment** - Same build process locally and in CI/CD
 
-### 📚 Documentation Updates
+### Documentation Updates
 
 #### Configuration Guides
 - **API Keys Section** - Comprehensive guide for setting up API keys
@@ -302,7 +304,7 @@ Found 7 enabled MCP servers:
 - **Server Descriptions** - Each server includes concise, useful descriptions
 - **Best Practices** - Guidelines for production deployment
 
-### 🔧 Technical Improvements
+### Technical Improvements
 
 #### Session Management
 - **Verbose-Controlled Logging** - Session cleanup warnings only in verbose mode
@@ -314,7 +316,7 @@ Found 7 enabled MCP servers:
 - **Environment Substitution** - Support for `${VAR_NAME}` in args, headers, and env
 - **Validation** - Automatic config validation and helpful error messages
 
-### 🐛 Bug Fixes
+### Bug Fixes
 
 #### Installer Improvements
 - **Non-Interactive Upgrade** - Fixed installer to auto-upgrade when run via `curl | bash`
@@ -325,11 +327,11 @@ Found 7 enabled MCP servers:
 
 ## [0.2.0] - 2025-11-17
 
-### 🚀 Major Enhancement: Persistent Daemon Architecture
+### Major Enhancement: Persistent Daemon Architecture
 
 This release introduces a **complete persistent daemon architecture** that provides Gemini CLI-like session persistence for browser automation MCP servers, enabling seamless multi-command workflows.
 
-### ✨ New Features
+### New Features
 
 #### Persistent Browser Sessions
 - **Daemon Background Service** - Cross-platform daemon process for managing persistent MCP connections
@@ -350,7 +352,7 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Session Auto-Creation** - Browser sessions automatically created when tools are called
 - **Cross-Platform Compatibility** - Windows, Linux, macOS, and WSL support
 
-### 🔧 Configuration Enhancements
+### Configuration Enhancements
 
 #### Simplified Server Configuration
 ```json
@@ -375,7 +377,7 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Smart Defaults** - Browser automation servers configured for persistence by default
 - **HTTP API Communication** - RESTful daemon interface for reliable session management
 
-### 🏗️ Architecture Improvements
+### Architecture Improvements
 
 #### Daemon System
 - **Cross-Platform Process Management** - Native process lifecycle management for all platforms
@@ -390,7 +392,7 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Session Auto-Start** - Automatically starts daemon for persistent servers
 - **Transport-Agnostic** - Works with both HTTP and stdio MCP servers
 
-### 🛠️ Developer Experience
+### Developer Experience
 
 #### Enhanced Error Handling
 - **Daemon Status Indicators** - Clear feedback on daemon connectivity
@@ -404,11 +406,11 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Clear Error Messages** - Actionable error messages with suggestions
 - **Status Reporting** - Rich status information for all daemon-managed sessions
 
-### 🔍 Testing and Validation
+### Testing and Validation
 
 #### Browser Automation Workflows
-- **Chrome DevTools Testing** - Complete workflow validation: navigate → console access → screenshots
-- **Playwright Testing** - Advanced automation testing: navigation → interaction → screenshots
+- **Chrome DevTools Testing** - Complete workflow validation: navigate -> console access -> screenshots
+- **Playwright Testing** - Advanced automation testing: navigation -> interaction -> screenshots
 - **Session Persistence** - Verified browser state maintained across multiple CLI invocations
 - **Cross-Platform Verification** - Daemon functionality validated on macOS, Linux, and Windows
 
@@ -418,7 +420,7 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Memory Management** - Efficient resource usage with proper cleanup
 - **Process Recovery** - Automatic recovery from browser process crashes
 
-### 📚 Documentation Updates
+### Documentation Updates
 
 #### Configuration Guide
 - **Daemon Setup** - Complete guide for enabling persistent sessions
@@ -436,7 +438,7 @@ This release introduces a **complete persistent daemon architecture** that provi
 
 ## [0.1.0] - 2025-11-15
 
-### 🎉 Initial Release
+### Initial Release
 
 ### Added
 - **MCP Protocol Implementation**: Full JSON-RPC 2.0 support for Model Context Protocol
