@@ -95,9 +95,13 @@ jobs:
       # ----------------------------------------------------------------
       - name: Prepare Linux Artifacts
         run: |
-          # Package Linux binaries into standardized tarballs
-          tar -czf dist/mcp-cli-ent-linux-amd64.tar.gz -C dist mcp-cli-ent-linux-amd64
-          tar -czf dist/mcp-cli-ent-linux-arm64.tar.gz -C dist mcp-cli-ent-linux-arm64
+          # Package Linux binaries as "mcp-cli-ent" for the tap
+          mkdir -p dist/linux-amd64 dist/linux-arm64
+          cp dist/mcp-cli-ent-linux-amd64 dist/linux-amd64/mcp-cli-ent
+          cp dist/mcp-cli-ent-linux-arm64 dist/linux-arm64/mcp-cli-ent
+          tar -czf dist/mcp-cli-ent-linux-amd64.tar.gz -C dist/linux-amd64 mcp-cli-ent
+          tar -czf dist/mcp-cli-ent-linux-arm64.tar.gz -C dist/linux-arm64 mcp-cli-ent
+          rm -rf dist/linux-amd64 dist/linux-arm64
 
       - name: Verify all binaries created
         run: |
