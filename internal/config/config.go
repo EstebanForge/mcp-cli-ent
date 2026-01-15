@@ -56,17 +56,18 @@ func EnsureConfigDirectory() error {
 		// Create default mcp_servers.json
 		exampleConfig := Configuration{
 			MCPServers: map[string]ServerConfig{
+				"chrome-devtools": {
+					Command:    "npx",
+					Args:       []string{"-y", "chrome-devtools-mcp@latest", "--isolated"},
+					Persistent: true,
+					Timeout:    60,
+				},
 				"context7": {
 					Type: "http",
 					URL:  "https://mcp.context7.com/mcp",
 					Headers: map[string]string{
 						"CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}",
 					},
-					Timeout: 30,
-				},
-				"sequential-thinking": {
-					Command: "npx",
-					Args:    []string{"-y", "@modelcontextprotocol/server-sequential-thinking"},
 					Timeout: 30,
 				},
 				"deepwiki": {
