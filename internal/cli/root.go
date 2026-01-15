@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	cfgFile    string
-	verbose    bool
-	timeout    int
+	cfgFile      string
+	verbose      bool
+	timeout      int
 	refreshCache bool
 	clearCache   bool
 )
@@ -39,7 +39,7 @@ type ToolsCache struct {
 
 const (
 	CacheFileName = "tools_cache.json"
-	CacheTTL     = 30 * 24 * time.Hour // Cache expires after 30 days
+	CacheTTL      = 30 * 24 * time.Hour // Cache expires after 30 days
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -66,7 +66,9 @@ func Execute() error {
 	originalHelpFunc := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		originalHelpFunc(cmd, args) // Show standard help
-		showAvailableServers(cmd)   // Then show available servers
+		if err := showAvailableServers(cmd); err != nil {
+			fmt.Printf("Warning: Failed to load servers: %v\n", err)
+		}
 	})
 	return rootCmd.Execute()
 }
@@ -161,6 +163,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	}
 
 	cache, err := LoadToolsFromCache()
+	if err != nil {
+		cache = nil
+	}
 	useCache := cache != nil && !refreshCache && !clearCache
 
 	var totalTools int
@@ -263,13 +268,17 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 
 		// Print each tool with usage example
 		for _, tool := range tools {
-			exampleArgs := BuildExampleArgs(&tool)
 			fmt.Printf("  • %s\n", tool.Name)
 			if verbose && tool.Description != "" {
 				// In verbose mode, show full description
 				fmt.Printf("    desc: %s\n", tool.Description)
 			}
-			fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
+			exampleArgs := BuildExampleArgs(&tool)
+			if verbose {
+				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
+			} else {
+				fmt.Printf("    mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
+			}
 		}
 		fmt.Println()
 	}
@@ -282,7 +291,7 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	fmt.Printf("Total: %d tools across %d servers\n\n", totalTools, len(enabledServers))
 	fmt.Println("For full details (descriptions + parameters):")
 	fmt.Println("  mcp-cli-ent list-tools <server>")
-	fmt.Println("\nUse --verbose for tool descriptions (prefixed with 'desc:')")
+	fmt.Println("\nUse --verbose for tool descriptions")
 
 	return nil
 }

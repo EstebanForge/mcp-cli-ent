@@ -44,7 +44,7 @@
       "enabled": false,
       "description": "Search the web, images, videos, news + AI summaries",
       "command": "npx",
-      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "http"],
+      "args": ["-y", "@brave/brave-search-mcp-server"],
       "env": {
         "BRAVE_API_KEY": "${ENT_BRAVE_API_KEY}"
       },
@@ -62,6 +62,7 @@
     "cipher": {
       "enabled": false,
       "description": "Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing",
+      "type": "stdio",
       "command": "cipher",
       "args": ["--mode", "mcp"],
       "env": {

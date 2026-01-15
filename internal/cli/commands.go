@@ -470,7 +470,6 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 		_ = SaveToolsToCache(cache)
 	}
 
-
 	if len(tools) == 0 {
 		fmt.Println("No tools found.")
 		return nil
@@ -495,7 +494,11 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 		}
 		// Build and display call example
 		exampleArgs := BuildExampleArgs(&tool)
-		fmt.Printf("    call: %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
+		if verbose {
+			fmt.Printf("    call: %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
+		} else {
+			fmt.Printf("    %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
+		}
 	}
 
 	return nil

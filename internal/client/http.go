@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
@@ -39,7 +40,7 @@ func NewHTTPClient(url string, config *mcp.ClientConfig) *HTTPClient {
 
 // ListTools retrieves available tools from the MCP server
 func (c *HTTPClient) ListTools(ctx context.Context) ([]mcp.Tool, error) {
-	req := mcp.NewRequest(1, "tools/list", &mcp.ListToolsParams{})
+	req := mcp.NewRequest(1, "tools/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -98,7 +99,7 @@ func (c *HTTPClient) CallTool(ctx context.Context, name string, arguments map[st
 
 // ListResources retrieves available resources from the MCP server
 func (c *HTTPClient) ListResources(ctx context.Context) ([]mcp.Resource, error) {
-	req := mcp.NewRequest(3, "resources/list", &mcp.ListResourcesParams{})
+	req := mcp.NewRequest(3, "resources/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -276,6 +277,10 @@ func (c *HTTPClient) Close() error {
 
 // sendRequest sends a JSON-RPC request to the MCP server
 func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (interface{}, error) {
+	return c.sendRequestWithURL(ctx, req, c.baseURL, false)
+}
+
+func (c *HTTPClient) sendRequestWithURL(ctx context.Context, req *mcp.JSONRPCRequest, urlStr string, triedFallback bool) (interface{}, error) {
 	// Marshal the request
 	reqBytes, err := mcp.MarshalRequest(req)
 	if err != nil {
@@ -283,7 +288,7 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewBuffer(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewBuffer(reqBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
@@ -311,6 +316,11 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (
 
 	// Check HTTP status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode == http.StatusNotFound && !triedFallback {
+			if fallbackURL, ok := httpFallbackURL(urlStr); ok {
+				return c.sendRequestWithURL(ctx, req, fallbackURL, true)
+			}
+		}
 		return nil, fmt.Errorf("HTTP error: %d %s - %s", resp.StatusCode, resp.Status, string(body))
 	}
 
@@ -326,4 +336,16 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (
 	}
 
 	return rpcResp.Result, nil
+}
+
+func httpFallbackURL(urlStr string) (string, bool) {
+	parsed, err := url.Parse(urlStr)
+	if err != nil {
+		return "", false
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", false
+	}
+	parsed.Path = "/mcp"
+	return parsed.String(), true
 }

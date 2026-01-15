@@ -2,7 +2,24 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+## [0.6.0] - 2026-01-15
+
+### Added
+
+- **HTTP Process Client**: Start local HTTP MCP servers when command+URL are configured, with a safe `/mcp` fallback for 404s.
+- **Optimized CLI Output**: Tool listings are cached (30-day TTL) with call examples for default output and `list-tools <server>`.
+- **Global Cache Flags**: Added `--refresh` and `--clear-cache` aliases to clear cache and force rediscovery.
+
+### Fixed
+
+- **Stdio Tool Listing**: Ignore non-JSON startup output and omit empty params for list requests to reduce protocol errors.
+- **Health Checks**: Skip cleanup health checks for hybrid sessions unless explicitly enabled.
+- **LLM-Friendly Formatting**: Renamed `Parameters:` to `params:` and ensured `--verbose` shows full descriptions without truncation.
+
+---
+
 ## [0.5.0] - 2026-01-02
+
 
 ### Added
 

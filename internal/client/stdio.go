@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -81,7 +82,7 @@ func NewStdioClient(command string, args []string, env map[string]string) (*Stdi
 
 // ListTools retrieves available tools from the MCP server
 func (c *StdioClient) ListTools(ctx context.Context) ([]mcp.Tool, error) {
-	req := mcp.NewRequest(1, "tools/list", &mcp.ListToolsParams{})
+	req := mcp.NewRequest(1, "tools/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -140,7 +141,7 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 
 // ListResources retrieves available resources from the MCP server
 func (c *StdioClient) ListResources(ctx context.Context) ([]mcp.Resource, error) {
-	req := mcp.NewRequest(3, "resources/list", &mcp.ListResourcesParams{})
+	req := mcp.NewRequest(3, "resources/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -369,32 +370,45 @@ func (c *StdioClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) 
 		return nil, fmt.Errorf("failed to flush request: %w", err)
 	}
 
-	// Read response with context
-	responseChan := make(chan []byte, 1)
-	errorChan := make(chan error, 1)
+	readLine := func(ctx context.Context) ([]byte, error) {
+		responseChan := make(chan []byte, 1)
+		errorChan := make(chan error, 1)
 
-	go func() {
-		line, err := c.reader.ReadBytes('\n')
-		if err != nil {
-			errorChan <- fmt.Errorf("failed to read response: %w", err)
-			return
+		go func() {
+			line, err := c.reader.ReadBytes('\n')
+			if err != nil {
+				errorChan <- fmt.Errorf("failed to read response: %w", err)
+				return
+			}
+			responseChan <- line
+		}()
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("request timeout: %w", ctx.Err())
+		case err := <-errorChan:
+			return nil, err
+		case line := <-responseChan:
+			return line, nil
 		}
-		responseChan <- line
-	}()
+	}
 
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("request timeout: %w", ctx.Err())
-	case err := <-errorChan:
-		return nil, err
-	case line := <-responseChan:
-		// Unmarshal JSON-RPC response
+	for {
+		line, err := readLine(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+
 		rpcResp, err := mcp.UnmarshalResponse(line)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal JSON-RPC response: %w", err)
+			continue
 		}
 
-		// Check for JSON-RPC error
 		if rpcResp.Error != nil {
 			return nil, fmt.Errorf("JSON-RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
 		}

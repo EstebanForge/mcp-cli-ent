@@ -240,8 +240,8 @@ func (m *Manager) cleanupDeadSessions() error {
 				continue
 			}
 
-			// Perform health check
-			if persistentSession.Status() == Active {
+			// Perform health check for persistent sessions (or explicit opt-in)
+			if persistentSession.Status() == Active && shouldHealthCheck(persistentSession) {
 				if err := persistentSession.HealthCheck(); err != nil {
 					fmt.Printf("Health check failed for session %s: %v\n", name, err)
 					toDelete = append(toDelete, name)
@@ -264,6 +264,16 @@ func (m *Manager) cleanupDeadSessions() error {
 	}
 
 	return nil
+}
+
+func shouldHealthCheck(sess *PersistentSession) bool {
+	if sess == nil {
+		return false
+	}
+	if sess.Type() == Persistent {
+		return true
+	}
+	return sess.Config().Session.HealthCheck
 }
 
 // saveSession saves session information to disk
