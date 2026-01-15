@@ -2,7 +2,7 @@
 
 *"Do not be hasty."*
 
-Access MCP servers without loading them into your agent's context window.
+Use MCP servers without loading them into your agent's context window.
 
 **CLI-Ent** = CLI tool + Context Guardian. Instead of loading MCP tool definitions into your agent's context, use `mcp-cli-ent` to call tools on-demand.
 
@@ -47,10 +47,10 @@ Note: Windows support is experimental. Contributions and testing are welcome. If
 mcp-cli-ent create-config
 
 # List available servers
-mcp-cli-ent list-servers
+mcp-cli-ent
 
 # List tools from a server
-mcp-cli-ent list-tools sequential-thinking
+mcp-cli-ent list-tools context7
 
 # Call a tool (get library docs via context7)
 mcp-cli-ent call-tool context7 get-library-docs '{
@@ -70,13 +70,13 @@ Tool Execution - Getting Documentation via Context7![MCP CLI-ENT Server List](sc
 Add to your `CLAUDE.md`:
 
 ```markdown
-To access MCP servers, use the CLI command tool: `mcp-cli-ent`
+To use MCP servers, run CLI tool: `mcp-cli-ent`
 ```
 
 Or:
 
 ```markdown
-MCP (Model Context Protocol) bridges external tools. Use servers to fetch live docs, perform complex reasoning, or automate browsers. Access via `mcp-cli-ent`
+MCP (Model Context Protocol) connects external tools. Use servers to fetch live docs, run complex reasoning, or automate browsers. Run CLI tool: `mcp-cli-ent`
 ```
 
 ## Configuration
