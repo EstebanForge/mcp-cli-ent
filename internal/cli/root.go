@@ -253,6 +253,10 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		_ = SaveToolsToCache(newCache)
 	}
 
+	fmt.Println("Usage:")
+	fmt.Println("mcp-cli-ent call-tool <server_name> <tool_name> <params>")
+	fmt.Println()
+
 	// Display tools
 	for serverName, serverConfig := range enabledServers {
 		tools, ok := toolsByServer[serverName]
@@ -261,24 +265,31 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		}
 
 		// Print server name with description if available
+		displayName := fmt.Sprintf("<%s>", serverName)
 		if serverConfig.Description != "" {
-			fmt.Printf("%s (%s):\n", serverName, serverConfig.Description)
+			fmt.Printf("%s (%s) [%d]\n", displayName, serverConfig.Description, len(tools))
 		} else {
-			fmt.Printf("%s:\n", serverName)
+			fmt.Printf("%s [%d]\n", displayName, len(tools))
 		}
 
-		// Print each tool with usage example
+		// Print each tool with example args
 		for _, tool := range tools {
-			fmt.Printf("  • %s\n", tool.Name)
+			exampleArgs := BuildExampleArgs(&tool)
+			if exampleArgs == "'{}'" {
+				fmt.Printf("  • %s\n", tool.Name)
+			} else {
+				fmt.Printf("  • %s %s\n", tool.Name, exampleArgs)
+			}
 			if verbose && tool.Description != "" {
 				// In verbose mode, show full description
 				fmt.Printf("    desc: %s\n", tool.Description)
 			}
-			exampleArgs := BuildExampleArgs(&tool)
 			if verbose {
-				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
-			} else {
-				fmt.Printf("    mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
+				if exampleArgs == "'{}'" {
+					fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n", serverName, tool.Name)
+				} else {
+					fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
+				}
 			}
 		}
 		fmt.Println()
@@ -290,8 +301,8 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	}
 
 	fmt.Printf("Total: %d tools across %d servers\n\n", totalTools, len(enabledServers))
-	fmt.Println("For full details (descriptions + parameters):")
-	fmt.Println("  mcp-cli-ent list-tools <server>")
+	fmt.Println("For full specific MCP server details:")
+	fmt.Println("  mcp-cli-ent list-tools <server_name>")
 	fmt.Println("\nUse --verbose for tool descriptions")
 
 	return nil

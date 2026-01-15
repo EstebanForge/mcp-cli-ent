@@ -479,7 +479,7 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 	for _, tool := range tools {
 		fmt.Printf("  • %s\n", tool.Name)
 		if tool.Description != "" {
-			fmt.Printf("    %s\n", tool.Description)
+			fmt.Printf("    desc: %s\n", tool.Description)
 		}
 		if tool.InputSchema != nil {
 			if properties, ok := tool.InputSchema["properties"].(map[string]interface{}); ok {
@@ -495,9 +495,17 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 		// Build and display call example
 		exampleArgs := BuildExampleArgs(&tool)
 		if verbose {
-			fmt.Printf("    call: %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
+			if exampleArgs == "'{}'" {
+				fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n\n", serverName, tool.Name)
+			} else {
+				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n\n", serverName, tool.Name, exampleArgs)
+			}
 		} else {
-			fmt.Printf("    %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
+			if exampleArgs == "'{}'" {
+				fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n\n", serverName, tool.Name)
+			} else {
+				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n\n", serverName, tool.Name, exampleArgs)
+			}
 		}
 	}
 
