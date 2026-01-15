@@ -45,9 +45,7 @@ func init() {
 	listServersCmd.Flags().BoolVar(&showAllServers, "all", false, "show disabled servers as well")
 }
 
-var (
-	showAllServers bool
-)
+var showAllServers bool
 
 var listToolsCmd = &cobra.Command{
 	Use:   "list-tools [server-name]",
@@ -245,6 +243,7 @@ func init() {
 	daemonStartCmd.Flags().BoolVar(&daemonForeground, "foreground", false, "Run daemon in foreground instead of background")
 	daemonLogsCmd.Flags().IntVar(&daemonLogsTail, "tail", 50, "Number of lines to show from the end of the log file")
 
+	// Add list-tools command (flags are now global: --refresh, --clear-cache)
 	rootCmd.AddCommand(listServersCmd)
 	rootCmd.AddCommand(listToolsCmd)
 	rootCmd.AddCommand(callToolCmd)
@@ -390,31 +389,8 @@ func runListTools(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	if len(args) == 0 {
-		// Show warning and suggest using a specific server
-		enabledServers := cfg.GetEnabledServers()
-		if len(enabledServers) == 0 {
-			fmt.Println("No enabled MCP servers found.")
-			return nil
-		}
-
-		fmt.Println("⚠️  Warning: Listing all tools from all enabled servers can be slow.")
-		fmt.Printf("Found %d enabled MCP servers:\n\n", len(enabledServers))
-
-		// Show server list with descriptions to help user choose
-		for serverName, serverConfig := range enabledServers {
-			if serverConfig.Description != "" {
-				fmt.Printf("  • %s - %s\n", serverName, serverConfig.Description)
-			} else {
-				fmt.Printf("  • %s\n", serverName)
-			}
-		}
-
-		fmt.Println("\n💡 Please specify a server name to see its tools:")
-		fmt.Printf("  %s list-tools <server-name>\n\n", os.Args[0])
-		fmt.Println("Example:")
-		fmt.Printf("  %s list-tools deepwiki\n", os.Args[0])
-
-		return nil
+		// Show all tools from all servers with usage examples (same behavior as root command)
+		return showRootHelpWithServers(cmd)
 	} else {
 		// List tools from specific server
 		serverName := args[0]
@@ -441,24 +417,59 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 	// Ensure verbose mode is set (called from session management)
 	_ = isVerbose()
 
-	// Create session-aware client factory
-	factory, err := getSessionAwareClientFactory()
-	if err != nil {
-		return fmt.Errorf("failed to create client factory: %w", err)
+	// If clearCache is set, clear cache file before proceeding
+	if clearCache {
+		cachePath, err := GetCachePath()
+		if err == nil {
+			_ = os.Remove(cachePath)
+			fmt.Println("Cache cleared.")
+		}
 	}
 
-	// Create session-aware client
-	mcpClient, err := factory.CreateClient(serverName, serverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+	// Try to load from cache first (unless forced refresh or cache was cleared)
+	var tools []mcp.Tool
+	if !refreshCache && !clearCache {
+		cache, err := LoadToolsFromCache()
+		if err == nil && cache != nil {
+			if entry, ok := cache.Servers[serverName]; ok && time.Since(entry.LastUpdate) < CacheTTL {
+				tools = entry.Tools
+			}
+		}
 	}
-	defer func() { _ = mcpClient.Close() }()
 
-	// List tools
-	tools, err := mcpClient.ListTools(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list tools: %w", err)
+	// If not in cache or forced refresh, fetch from server
+	if tools == nil {
+		// Create session-aware client factory
+		factory, err := getSessionAwareClientFactory()
+		if err != nil {
+			return fmt.Errorf("failed to create client factory: %w", err)
+		}
+
+		// Create session-aware client
+		mcpClient, err := factory.CreateClient(serverName, serverConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create client: %w", err)
+		}
+		defer func() { _ = mcpClient.Close() }()
+
+		// List tools
+		tools, err = mcpClient.ListTools(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list tools: %w", err)
+		}
+
+		// Update cache
+		cache, err := LoadToolsFromCache()
+		if err != nil || cache == nil {
+			cache = &ToolsCache{Servers: make(map[string]ToolsCacheEntry)}
+		}
+		cache.Servers[serverName] = ToolsCacheEntry{
+			Tools:      tools,
+			LastUpdate: time.Now(),
+		}
+		_ = SaveToolsToCache(cache)
 	}
+
 
 	if len(tools) == 0 {
 		fmt.Println("No tools found.")
@@ -478,11 +489,13 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 					paramNames = append(paramNames, name)
 				}
 				if len(paramNames) > 0 {
-					fmt.Printf("    Parameters: %s\n", strings.Join(paramNames, ", "))
+					fmt.Printf("    params: %s\n", strings.Join(paramNames, ", "))
 				}
 			}
 		}
-		fmt.Println()
+		// Build and display call example
+		exampleArgs := BuildExampleArgs(&tool)
+		fmt.Printf("    call: %s call-tool %s %s %s\n\n", os.Args[0], serverName, tool.Name, exampleArgs)
 	}
 
 	return nil
