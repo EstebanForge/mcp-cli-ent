@@ -46,9 +46,10 @@ const (
 var rootCmd = &cobra.Command{
 	Use:   "mcp-cli-ent",
 	Short: "MCP server client",
-	Long: `MCP CLI-Ent: Call MCP tools without loading them into agent context.
+	Long: fmt.Sprintf(`MCP CLI-Ent v%s: Use MCP tools without loading them into agent context window.
 
 Use "mcp-cli-ent --help verbose" for detailed information.`,
+		version.Version),
 	Version: version.Version,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If no command was specified, show help with available servers
