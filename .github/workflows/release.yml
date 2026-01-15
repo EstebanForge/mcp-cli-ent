@@ -103,6 +103,22 @@ jobs:
           tar -czf dist/mcp-cli-ent-linux-arm64.tar.gz -C dist/linux-arm64 mcp-cli-ent
           rm -rf dist/linux-amd64 dist/linux-arm64
 
+      - name: Validate Homebrew Tarballs
+        run: |
+          set -e
+          archives=(
+            "dist/mcp-cli-ent-macos-universal.tar.gz"
+            "dist/mcp-cli-ent-linux-amd64.tar.gz"
+            "dist/mcp-cli-ent-linux-arm64.tar.gz"
+          )
+
+          for archive in "${archives[@]}"; do
+            if ! tar -tzf "${archive}" | grep -qx "mcp-cli-ent"; then
+              echo "Error: ${archive} must contain mcp-cli-ent at archive root"
+              exit 1
+            fi
+          done
+
       - name: Verify all binaries created
         run: |
           expected_binaries=(
