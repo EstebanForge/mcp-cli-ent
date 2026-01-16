@@ -66,24 +66,6 @@ Arguments should be a valid JSON string, e.g., '{"libraryName": "react"}'`,
 	RunE: runCallTool,
 }
 
-var listResourcesCmd = &cobra.Command{
-	Use:   "list-resources <server-name>",
-	Short: "List resources from an MCP server",
-	Long: `List available resources from a specific MCP server.
-Resources can include files, documentation, and other data sources.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runListResources,
-}
-
-var listRootsCmd = &cobra.Command{
-	Use:   "list-roots <server-name>",
-	Short: "List filesystem roots from an MCP server",
-	Long: `List filesystem roots that the MCP server has access to.
-Roots define the directory boundaries for server operations.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runListRoots,
-}
-
 var requestInputCmd = &cobra.Command{
 	Use:   "request-input <server-name> [message] [schema]",
 	Short: "Request input from user via MCP server elicitation",
@@ -247,8 +229,6 @@ func init() {
 	rootCmd.AddCommand(listServersCmd)
 	rootCmd.AddCommand(listToolsCmd)
 	rootCmd.AddCommand(callToolCmd)
-	rootCmd.AddCommand(listResourcesCmd)
-	rootCmd.AddCommand(listRootsCmd)
 	rootCmd.AddCommand(requestInputCmd)
 	rootCmd.AddCommand(createMessageCmd)
 	rootCmd.AddCommand(initializeCmd)
@@ -568,71 +548,6 @@ func runCallTool(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runListResources(cmd *cobra.Command, args []string) error {
-	configPath := GetConfigPath()
-
-	// Load configuration
-	cfg, err := LoadConfiguration(configPath)
-	if err != nil {
-		return err
-	}
-
-	serverName := args[0]
-
-	// Get server configuration
-	serverConfig, exists := cfg.GetServer(serverName)
-	if !exists {
-		displayServerNotFoundError(serverName, cfg)
-		return nil
-	}
-
-	if !serverConfig.IsEnabled() {
-		return fmt.Errorf("server '%s' is disabled", serverName)
-	}
-
-	// Create session-aware client factory
-	factory, err := getSessionAwareClientFactory()
-	if err != nil {
-		return fmt.Errorf("failed to create client factory: %w", err)
-	}
-
-	// Create session-aware client
-	mcpClient, err := factory.CreateClient(serverName, serverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-	defer func() { _ = mcpClient.Close() }()
-
-	// List resources
-	ctx := context.Background()
-	resources, err := mcpClient.ListResources(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list resources: %w", err)
-	}
-
-	if len(resources) == 0 {
-		fmt.Println("No resources found.")
-		return nil
-	}
-
-	fmt.Printf("Available resources (%d):\n", len(resources))
-	for _, resource := range resources {
-		fmt.Printf("  • %s\n", resource.URI)
-		if resource.Name != "" {
-			fmt.Printf("    Name: %s\n", resource.Name)
-		}
-		if resource.Description != "" {
-			fmt.Printf("    Description: %s\n", resource.Description)
-		}
-		if resource.MimeType != "" {
-			fmt.Printf("    Type: %s\n", resource.MimeType)
-		}
-		fmt.Println()
-	}
-
-	return nil
-}
-
 func runCreateConfig(cmd *cobra.Command, args []string) error {
 	var filename string
 	if len(args) > 0 {
@@ -941,65 +856,6 @@ func runInitialize(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Initialization successful:")
 	fmt.Println(string(resultBytes))
-	return nil
-}
-
-func runListRoots(cmd *cobra.Command, args []string) error {
-	configPath := GetConfigPath()
-
-	// Load configuration
-	cfg, err := LoadConfiguration(configPath)
-	if err != nil {
-		return err
-	}
-
-	serverName := args[0]
-
-	// Get server configuration
-	serverConfig, exists := cfg.GetServer(serverName)
-	if !exists {
-		displayServerNotFoundError(serverName, cfg)
-		return nil
-	}
-
-	if !serverConfig.IsEnabled() {
-		return fmt.Errorf("server '%s' is disabled", serverName)
-	}
-
-	// Create session-aware client factory
-	factory, err := getSessionAwareClientFactory()
-	if err != nil {
-		return fmt.Errorf("failed to create client factory: %w", err)
-	}
-
-	// Create session-aware client
-	mcpClient, err := factory.CreateClient(serverName, serverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-	defer func() { _ = mcpClient.Close() }()
-
-	// List roots
-	ctx := context.Background()
-	roots, err := mcpClient.ListRoots(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list roots: %w", err)
-	}
-
-	if len(roots) == 0 {
-		fmt.Println("No roots configured.")
-		return nil
-	}
-
-	fmt.Printf("Filesystem roots (%d):\n", len(roots))
-	for _, root := range roots {
-		fmt.Printf("  • %s", root.URI)
-		if root.Name != "" {
-			fmt.Printf(" (%s)", root.Name)
-		}
-		fmt.Println()
-	}
-
 	return nil
 }
 

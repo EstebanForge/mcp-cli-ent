@@ -2,7 +2,7 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
-## [0.6.0] - 2026-01-15
+## [0.6.1] - 2026-01-15
 
 ### Added
 

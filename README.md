@@ -119,7 +119,6 @@ mcp-cli-ent list-servers              # List enabled servers
 mcp-cli-ent list-servers --all        # List all servers (enabled/disabled)
 mcp-cli-ent list-tools [server]       # List tools from server
 mcp-cli-ent call-tool <server> <tool> [args]  # Call a tool
-mcp-cli-ent list-resources <server>   # List server resources
 mcp-cli-ent version                   # Show version
 ```
 
