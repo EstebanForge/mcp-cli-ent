@@ -65,6 +65,8 @@ Tool Execution - Getting Documentation via Context7![MCP CLI-ENT Server List](sc
 
 ![MCP CLI-ENT Tool Call](screenshot-02.png)
 
+![MCP CLI-ENT No Arguments](screenshot-03.png)
+
 ## For AI Agents
 
 Add to your `CLAUDE.md`:
