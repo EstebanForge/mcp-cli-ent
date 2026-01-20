@@ -2,6 +2,14 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+## [1.0.0] - 2026-01-20
+
+### Added
+
+- **Official 1.0 Release**: Marked CLI as stable and production-ready.
+
+---
+
 ## [0.6.1] - 2026-01-15
 
 ### Added

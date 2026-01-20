@@ -72,13 +72,13 @@ Tool Execution - Getting Documentation via Context7![MCP CLI-ENT Server List](sc
 Add to your `CLAUDE.md`:
 
 ```markdown
-To use MCP servers, run CLI tool: `mcp-cli-ent`
+Use MCP servers with CLI tool: `mcp-cli-ent`
 ```
 
 Or:
 
 ```markdown
-MCP (Model Context Protocol) connects external tools. Use servers to fetch live docs, run complex reasoning, or automate browsers. Run CLI tool: `mcp-cli-ent`
+MCP (Model Context Protocol) connects external tools. Use servers to fetch live docs, run complex reasoning, or automate browsers. Use them with CLI tool: `mcp-cli-ent`
 ```
 
 ## Configuration
