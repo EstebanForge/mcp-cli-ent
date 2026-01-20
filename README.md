@@ -1,6 +1,9 @@
 # MCP CLI-Ent
 
-*"Do not be hasty."*
+<p align="center">
+  <img src="mcp-cli-ent-precious.png" alt="My Precious Tokens!" /><br/>
+  <em>"Do not be hasty."</em>
+</p>
 
 Use MCP servers without loading them into your agent's context window.
 
@@ -18,13 +21,13 @@ Use MCP servers without loading them into your agent's context window.
 
 ## Quick Install
 
-**Homebrew (macOS & Linux):**
+**Homebrew (Linux, WSL & macOS):**
 
 ```bash
 brew install EstebanForge/tap/mcp-cli-ent
 ```
 
-**Linux, macOS & Windows WSL:**
+**Direct binary install (Linux, WSL & macOS):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EstebanForge/mcp-cli-ent/main/scripts/install.sh | bash
@@ -69,7 +72,7 @@ Tool Execution - Getting Documentation via Context7![MCP CLI-ENT Server List](sc
 
 ## For AI Agents
 
-Add to your `CLAUDE.md`:
+Add to your `AGENTS.md` (or `CLAUDE.md`, thank you for not following standards):
 
 ```markdown
 Use MCP servers with CLI tool: `mcp-cli-ent`
