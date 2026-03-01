@@ -263,13 +263,18 @@ make build
 ### Build Commands
 
 ```bash
-make build          # Build for current platform
+make build          # Build unsigned local binary (bin/mcp-cli-ent)
+make sign           # Sign local binary on macOS (optional)
+make build-signed   # Build + sign local binary on macOS (optional)
 make build-all      # Build for all platforms
 make dev-setup      # Development setup
 make test           # Run tests
 make test-coverage  # Run tests with coverage
-make fmt            # Format code
+make fmt            # Format code (go fmt + optional goimports)
+make vet            # Run go vet
 make lint           # Lint code
+make check          # Full flow: fmt + vet + lint + test + build (+check-config)
+make ci             # CI alias for make check
 ```
 
 ## Security & Build Integrity

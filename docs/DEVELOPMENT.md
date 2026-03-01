@@ -4,6 +4,16 @@
 
 To ensure code quality and catch issues before pushing to the repository, we provide a comprehensive pre-push validation script that replicates all GitHub Actions CI/CD checks locally.
 
+## Standard Make Workflow
+
+Use these targets as the default local workflow:
+
+```bash
+make check         # check-config + fmt + vet + lint + test + build
+make ci            # alias of make check
+./scripts/checks.sh  # thin wrapper around make check
+```
+
 ### What It Checks
 
 The pre-push validation script (`scripts/pre-push-check.sh`) performs the following checks:

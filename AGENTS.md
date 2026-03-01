@@ -61,7 +61,7 @@ mcp-cli-ent/
 ### Prerequisites
 - Go 1.21 or later
 - Git
-- Make (optional, for build automation)
+- Make
 
 ### Initial Setup
 ```bash
@@ -88,12 +88,17 @@ make test
 
 **Development:**
 ```bash
-make build          # Build for current platform (dev version)
+make build          # Build unsigned local binary (bin/mcp-cli-ent)
+make sign           # Sign local binary on macOS (optional)
+make build-signed   # Build + sign local binary on macOS (optional)
 make build-all      # Build for all platforms (dev version)
-make test           # Run unit tests
+make test           # Run tests (deps + verify + go test)
 make test-coverage  # Run tests with coverage report
-make fmt            # Format code (go fmt + goimports)
+make fmt            # Format code (go fmt + optional goimports)
+make vet            # Run go vet
 make lint           # Run golangci-lint
+make check          # Full flow: fmt + vet + lint + test + build (+check-config)
+make ci             # CI alias for make check
 make clean          # Clean build artifacts
 make deps           # Download and tidy dependencies
 ```
@@ -102,6 +107,8 @@ make deps           # Download and tidy dependencies
 ```bash
 make build-release  # Build for all platforms (release version)
 make release        # Full release build (test + lint + build-release)
+make release-sign   # Sign release macOS binaries (optional)
+make notarize-release # Notarize release artifacts (optional)
 make set-version VERSION=1.2.3  # Set release version
 ```
 
@@ -128,10 +135,10 @@ make help           # Show all available targets
 - Artifacts: Build binaries retained for 30 days
 
 **Release Workflow** (`.github/workflows/release.yml`):
-- Triggers: Git tags matching `v*`
+- Triggers: Git tags matching `*.*.*` (no `v` prefix)
 - Actions: Build all platforms, generate changelog, create GitHub release
 - Assets: Platform-specific archives with checksums
-- Excludes: Windows ARM64 (not supported)
+- Includes: Linux/macOS/Windows amd64 + arm64 artifacts
 
 ## Core Architecture
 
@@ -439,7 +446,7 @@ sudo cp bin/mcp-cli-ent /usr/local/bin/
 
 ### Go Standards
 - Follow Go standard formatting (`go fmt`)
-- Use `goimports` for import organization
+- Use `goimports` for import organization when available (`make fmt` applies it if installed)
 - Run `golangci-lint` for comprehensive linting
 - Maintain public API documentation with godoc comments
 
