@@ -1,21 +1,64 @@
-.PHONY: build test test-mcp-servers clean install release fmt lint deps sync-config check-config
+.PHONY: build sign build-signed release-sign notarize-release test test-mcp-servers clean install release fmt vet lint deps sync-config check-config check
 
 # Default target
 all: build
 
 # Variables
 BINARY_NAME=mcp-cli-ent
+BINARY_PATH=bin/${BINARY_NAME}
 RELEASE_VERSION=$(shell cat VERSION 2>/dev/null || echo "0.1.0")
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo $(RELEASE_VERSION))
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${VERSION} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${COMMIT} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=${DATE}"
 RELEASE_LDFLAGS=-ldflags "-X github.com/mcp-cli-ent/mcp-cli/pkg/version.Version=${RELEASE_VERSION} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Commit=${COMMIT} -X github.com/mcp-cli-ent/mcp-cli/pkg/version.Date=${DATE}"
+SIGN_IDENTITY?=-
 
 # Build for current platform
-build: check-config
+build:
 	@echo "Building ${BINARY_NAME}..."
-	go build ${LDFLAGS} -o bin/${BINARY_NAME} ./cmd/mcp-cli-ent
+	@mkdir -p $(dir ${BINARY_PATH})
+	go build -o ${BINARY_PATH} ./cmd/mcp-cli-ent
+
+sign: build
+	@echo "Signing ${BINARY_PATH} (macOS only)..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		codesign -s "$(SIGN_IDENTITY)" -f "${BINARY_PATH}"; \
+		echo "✓ Signed: ${BINARY_PATH}"; \
+	else \
+		echo "ℹ️  Skipping sign (non-macOS)"; \
+	fi
+
+build-signed: build sign
+
+release-sign:
+	@if [ "$${RELEASE_SIGN:-0}" != "1" ]; then \
+		echo "ℹ️  RELEASE_SIGN!=1; skipping release signing"; \
+	elif [ "$$(uname)" != "Darwin" ]; then \
+		echo "ℹ️  Release signing requires a macOS runner; skipping"; \
+	else \
+		for bin in dist/${BINARY_NAME}-darwin-amd64 dist/${BINARY_NAME}-darwin-arm64; do \
+			if [ -f "$$bin" ]; then \
+				codesign -s "$(SIGN_IDENTITY)" -f "$$bin"; \
+				echo "✓ Signed $$bin"; \
+			else \
+				echo "ℹ️  Missing $$bin (skip)"; \
+			fi; \
+		done; \
+	fi
+
+notarize-release:
+	@if [ "$${RELEASE_NOTARIZE:-0}" != "1" ]; then \
+		echo "ℹ️  RELEASE_NOTARIZE!=1; skipping notarization"; \
+	elif [ "$$(uname)" != "Darwin" ]; then \
+		echo "✗ Notarization requires macOS runner"; \
+		exit 1; \
+	elif [ -x "./scripts/notarize-release.sh" ]; then \
+		./scripts/notarize-release.sh; \
+	else \
+		echo "✗ scripts/notarize-release.sh not found/executable"; \
+		exit 1; \
+	fi
 
 # Build for all platforms
 build-all:
@@ -75,8 +118,17 @@ set-version:
 
 # Run tests
 test:
+	@echo "Downloading dependencies..."
+	go mod download
+	@echo "Verifying dependencies..."
+	go mod verify
 	@echo "Running tests..."
-	go test -v ./...
+	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
+		go test -v -race ./...; \
+	else \
+		echo "CGO disabled; running tests without -race"; \
+		go test -v ./...; \
+	fi
 
 # Run tests with coverage
 test-coverage:
@@ -94,12 +146,39 @@ test-mcp-servers:
 fmt:
 	@echo "Formatting code..."
 	go fmt ./...
-	goimports -w .
+	@if command -v goimports >/dev/null 2>&1; then \
+		goimports -w .; \
+	else \
+		echo "⚠️  goimports not found; skipping import formatting"; \
+		echo "   Install with: go install golang.org/x/tools/cmd/goimports@latest"; \
+	fi
+
+# Run go vet
+vet:
+	@echo "Running go vet..."
+	go vet ./...
 
 # Lint code
 lint:
 	@echo "Linting code..."
+	@command -v golangci-lint >/dev/null 2>&1 || (echo "golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" && exit 1)
 	golangci-lint run
+
+# Run full checks
+check:
+	@echo "==> make check-config"
+	@$(MAKE) --no-print-directory check-config
+	@echo "==> make fmt"
+	@$(MAKE) --no-print-directory fmt
+	@echo "==> make vet"
+	@$(MAKE) --no-print-directory vet
+	@echo "==> make lint"
+	@$(MAKE) --no-print-directory lint
+	@echo "==> make test"
+	@$(MAKE) --no-print-directory test
+	@echo "==> make build"
+	@$(MAKE) --no-print-directory build
+	@echo "✓ Full checks complete"
 
 # Pre-push validation (replicates GitHub Actions checks)
 pre-push:
@@ -180,13 +259,19 @@ check-config:
 help:
 	@echo "Available targets:"
 	@echo "  build          - Build for current platform (dev version)"
+	@echo "  sign           - Sign local binary (macOS only)"
+	@echo "  build-signed   - Build and sign local binary (macOS)"
 	@echo "  build-all      - Build for all platforms (dev version)"
 	@echo "  build-release  - Build for all platforms (release version from VERSION file)"
+	@echo "  release-sign   - Sign macOS release binaries (optional)"
+	@echo "  notarize-release - Notarize release binaries (optional)"
 	@echo "  test           - Run tests"
 	@echo "  test-coverage  - Run tests with coverage"
 	@echo "  test-mcp-servers - Test all MCP servers and CLI commands"
 	@echo "  fmt            - Format code"
+	@echo "  vet            - Run go vet"
 	@echo "  lint           - Lint code"
+	@echo "  check          - Run full checks (fmt, vet, lint, test, build)"
 	@echo "  pre-push       - Run pre-push validation (replicates GitHub Actions)"
 	@echo "  install-hooks  - Install git pre-push hook"
 	@echo "  uninstall-hooks- Remove git pre-push hook"
