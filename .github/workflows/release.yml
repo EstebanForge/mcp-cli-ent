@@ -1,18 +1,25 @@
----
 name: Release
 
 on:
   push:
     tags:
-      - '*.*.*'
+      - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (example: 1.2.3 or 1.2.3-rc.1)"
+        required: true
+        type: string
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve_version.outputs.version }}
+      is_prerelease: ${{ steps.resolve_version.outputs.is_prerelease }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,36 +29,67 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Get version from tag
+      - name: Resolve release version
+        id: resolve_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          
-          if [ -z "$VERSION" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${{ github.event.inputs.tag }}"
+          fi
+
+          if [ -z "${VERSION}" ]; then
             echo "Error: VERSION is empty"
             exit 1
           fi
 
+          if [[ "${VERSION}" == v* ]]; then
+            echo "Error: tags must not use 'v' prefix (got: ${VERSION})"
+            exit 1
+          fi
+
+          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Error: VERSION must be SemVer-like (got: ${VERSION})"
+            exit 1
+          fi
+
+          BASE_VERSION="${VERSION%%+*}"
+          if [[ "${BASE_VERSION}" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+          echo "VERSION_SEMVER=${VERSION}" >> "${GITHUB_ENV}"
+          echo "IS_PRERELEASE=${IS_PRERELEASE}" >> "${GITHUB_ENV}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "${GITHUB_OUTPUT}"
+
       - name: Download dependencies
         run: go mod download
 
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Sync VERSION file with tag
+        run: echo "${{ env.VERSION_SEMVER }}" > VERSION
+
       - name: Run tests
-        run: go test -v ./... || echo "No test files found, continuing..."
+        run: make test
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.9.0
           args: --timeout=5m
-        continue-on-error: true
 
       - name: Check config sync
         run: make check-config
-
-      - name: Set release version
-        run: echo "${{ env.VERSION }}" > VERSION
 
       - name: Build release binaries
         run: |
@@ -67,44 +105,27 @@ jobs:
           make release-sign
           make notarize-release
 
-      # ----------------------------------------------------------------
-      # NEW: Create Universal Binary for Homebrew Tap
-      # ----------------------------------------------------------------
       - name: Create macOS Universal Binary
         run: |
-          # Install llvm to get llvm-lipo
           sudo apt-get update && sudo apt-get install -y llvm
 
-          # Ensure llvm-lipo is available
           if ! command -v llvm-lipo &> /dev/null; then
-              # Try to find versioned llvm-lipo and symlink it
-              LIPO_PATH=$(find /usr/bin -name "llvm-lipo-*" | head -n 1)
-              if [ -n "$LIPO_PATH" ]; then
-                  sudo ln -s "$LIPO_PATH" /usr/bin/llvm-lipo
-              else
-                  echo "Error: llvm-lipo not found"
-                  exit 1
-              fi
+            LIPO_PATH=$(find /usr/bin -name "llvm-lipo-*" | head -n 1)
+            if [ -n "$LIPO_PATH" ]; then
+              sudo ln -s "$LIPO_PATH" /usr/bin/llvm-lipo
+            else
+              echo "Error: llvm-lipo not found"
+              exit 1
+            fi
           fi
 
-          # Create universal binary using llvm-lipo
           llvm-lipo -create -output dist/mcp-cli-ent dist/mcp-cli-ent-darwin-amd64 dist/mcp-cli-ent-darwin-arm64
-          
-          # Verify it is universal
           file dist/mcp-cli-ent
-          
-          # Create the specific tarball expected by the tap
           tar -czf dist/mcp-cli-ent-macos-universal.tar.gz -C dist mcp-cli-ent
-          
-          # Cleanup temporary binary
           rm dist/mcp-cli-ent
 
-      # ----------------------------------------------------------------
-      # NEW: Prepare Linux Artifacts for Homebrew Tap
-      # ----------------------------------------------------------------
       - name: Prepare Linux Artifacts
         run: |
-          # Package Linux binaries as "mcp-cli-ent" for the tap
           mkdir -p dist/linux-amd64 dist/linux-arm64
           cp dist/mcp-cli-ent-linux-amd64 dist/linux-amd64/mcp-cli-ent
           cp dist/mcp-cli-ent-linux-arm64 dist/linux-arm64/mcp-cli-ent
@@ -128,48 +149,75 @@ jobs:
             fi
           done
 
-      - name: Verify all binaries created
-        run: |
-          expected_binaries=(
-            "mcp-cli-ent-linux-amd64"
-            "mcp-cli-ent-linux-arm64"
-            "mcp-cli-ent-darwin-amd64"
-            "mcp-cli-ent-darwin-arm64"
-            "mcp-cli-ent-windows-amd64.exe"
-            "mcp-cli-ent-windows-arm64.exe"
-            "mcp-cli-ent-macos-universal.tar.gz"
-            "mcp-cli-ent-linux-amd64.tar.gz"
-            "mcp-cli-ent-linux-arm64.tar.gz"
-          )
-
-          missing_count=0
-          for binary in "${expected_binaries[@]}"; do
-            if [ -f "dist/$binary" ]; then
-              size=$(stat -c%s "dist/$binary")
-              echo "✅ $binary found (size: $size bytes)"
-            else
-              echo "❌ $binary missing!"
-              missing_count=$((missing_count + 1))
-            fi
-          done
-
-          if [ $missing_count -gt 0 ]; then
-            exit 1
-          fi
-
-      - name: Make binaries executable
-        run: chmod +x dist/*
-
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum * > checksums.txt
+          sha256sum \
+            mcp-cli-ent-linux-amd64 \
+            mcp-cli-ent-linux-arm64 \
+            mcp-cli-ent-darwin-amd64 \
+            mcp-cli-ent-darwin-arm64 \
+            mcp-cli-ent-windows-amd64.exe \
+            mcp-cli-ent-windows-arm64.exe \
+            mcp-cli-ent-macos-universal.tar.gz \
+            mcp-cli-ent-linux-amd64.tar.gz \
+            mcp-cli-ent-linux-arm64.tar.gz \
+            > checksums.txt
 
-      - name: Create Release Notes
+      - name: Verify release outputs
         run: |
-          printf "## Release Notes\n\n" > release_notes.md
-          if [ -f CHANGELOG.md ]; then
-            awk '/^## \[.*\] - / {if (found) exit; found=1} found' CHANGELOG.md | head -n -1 >> release_notes.md
+          set -e
+          expected_files=(
+            "dist/mcp-cli-ent-linux-amd64"
+            "dist/mcp-cli-ent-linux-arm64"
+            "dist/mcp-cli-ent-darwin-amd64"
+            "dist/mcp-cli-ent-darwin-arm64"
+            "dist/mcp-cli-ent-windows-amd64.exe"
+            "dist/mcp-cli-ent-windows-arm64.exe"
+            "dist/mcp-cli-ent-macos-universal.tar.gz"
+            "dist/mcp-cli-ent-linux-amd64.tar.gz"
+            "dist/mcp-cli-ent-linux-arm64.tar.gz"
+            "dist/checksums.txt"
+          )
+
+          for file in "${expected_files[@]}"; do
+            if [ -f "${file}" ]; then
+              size=$(stat -c%s "${file}")
+              echo "OK ${file} (size: ${size} bytes)"
+            else
+              echo "Missing expected artifact: ${file}"
+              exit 1
+            fi
+          done
+
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          VERSION_SEMVER: ${{ env.VERSION_SEMVER }}
+        run: |
+          set -euo pipefail
+
+          changelog_file="CHANGELOG.md"
+          notes_file="release_notes.md"
+          start_marker="<!-- RELEASE:START ${VERSION_SEMVER} -->"
+          end_marker="<!-- RELEASE:END ${VERSION_SEMVER} -->"
+
+          if [ -f "${changelog_file}" ]; then
+            awk -v start="${start_marker}" -v end="${end_marker}" '
+              $0 == start { in_section = 1; next }
+              $0 == end { in_section = 0; exit }
+              in_section { print }
+            ' "${changelog_file}" > "${notes_file}"
+          else
+            : > "${notes_file}"
+          fi
+
+          if ! grep -q '[^[:space:]]' "${notes_file}"; then
+            prev_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+            if [ -n "${prev_tag}" ]; then
+              echo "**Full changelog:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${prev_tag}...${VERSION_SEMVER}" > "${notes_file}"
+            else
+              echo "**Full changelog:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${VERSION_SEMVER}" > "${notes_file}"
+            fi
           fi
 
       - name: Create GitHub Release
@@ -179,7 +227,7 @@ jobs:
           name: MCP CLI-Ent ${{ env.VERSION }}
           body_path: release_notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.resolve_version.outputs.is_prerelease == 'true' }}
           files: |
             dist/mcp-cli-ent-linux-amd64
             dist/mcp-cli-ent-linux-arm64
@@ -194,22 +242,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update VERSION file
+      - name: Update VERSION file on main
         env:
-          VERSION: ${{ env.VERSION }}
+          VERSION_SEMVER: ${{ env.VERSION_SEMVER }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${VERSION_SEMVER}" > VERSION
           git add VERSION
-          git commit -m "chore: update VERSION to $VERSION" || echo "No changes to commit"
+          git commit -m "chore: update VERSION to ${VERSION_SEMVER}" || echo "No changes to commit"
           git push origin HEAD:main || echo "Failed to push VERSION file update"
 
   update-tap:
     needs: release
+    if: ${{ needs.release.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Homebrew Tap Update
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.TAP_GITHUB_TOKEN }}
           script: |
@@ -220,7 +270,7 @@ jobs:
               ref: 'main',
               inputs: {
                 formula: 'mcp-cli-ent',
-                tag: '${{ github.ref_name }}',
+                tag: '${{ needs.release.outputs.version }}',
                 repository: '${{ github.repository }}'
               }
             })

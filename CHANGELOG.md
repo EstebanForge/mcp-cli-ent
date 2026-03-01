@@ -2,14 +2,18 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.0.0 -->
 ## [1.0.0] - 2026-01-20
 
 ### Added
 
 - **Official 1.0 Release**: Marked CLI as stable and production-ready.
 
+<!-- RELEASE:END 1.0.0 -->
 ---
 
+
+<!-- RELEASE:START 0.6.1 -->
 ## [0.6.1] - 2026-01-15
 
 ### Added
@@ -24,8 +28,11 @@ All notable changes to MCP CLI-Ent will be documented in this file.
 - **Health Checks**: Skip cleanup health checks for hybrid sessions unless explicitly enabled.
 - **LLM-Friendly Formatting**: Renamed `Parameters:` to `params:` and ensured `--verbose` shows full descriptions without truncation.
 
+<!-- RELEASE:END 0.6.1 -->
 ---
 
+
+<!-- RELEASE:START 0.5.0 -->
 ## [0.5.0] - 2026-01-02
 
 
@@ -39,8 +46,11 @@ All notable changes to MCP CLI-Ent will be documented in this file.
 - **Improved Cleanup Safety**: Explicitly ignored errors for `Close()` and `os.Remove()` calls in cleanup routines.
 - **Enhanced Environment Handling**: Fixed unchecked `os.Setenv()` return values in verbose mode initialization.
 
+<!-- RELEASE:END 0.5.0 -->
 ---
 
+
+<!-- RELEASE:START 0.4.0 -->
 ## [0.4.0] - 2025-11-27
 
 ### Fixed
@@ -224,8 +234,11 @@ OK Configuration handling validated
 - Clear test results with actionable feedback
 - Automated validation of all CLI functionality
 
+<!-- RELEASE:END 0.4.0 -->
 ---
 
+
+<!-- RELEASE:START 0.3.0 -->
 ## [0.3.0] - 2025-11-26
 
 ### Improved
@@ -348,8 +361,11 @@ Note: Please specify a server name to see its tools:
 - **Interactive Detection** - Properly detects TTY and skips prompts in non-interactive mode
 - **Version Comparison** - Improved version detection and upgrade logic
 
+<!-- RELEASE:END 0.3.0 -->
 ---
 
+
+<!-- RELEASE:START 0.2.0 -->
 ## [0.2.0] - 2025-11-17
 
 ### Major Enhancement: Persistent Daemon Architecture
@@ -459,8 +475,11 @@ This release introduces a **complete persistent daemon architecture** that provi
 - **Chrome DevTools Console** - Browser console access and debugging examples
 - **Cross-Platform Usage** - Platform-specific configuration and usage
 
+<!-- RELEASE:END 0.2.0 -->
 ---
 
+
+<!-- RELEASE:START 0.1.0 -->
 ## [0.1.0] - 2025-11-15
 
 ### Initial Release
@@ -532,3 +551,4 @@ This release introduces a **complete persistent daemon architecture** that provi
 - Makefile with comprehensive build targets
 - Automated dependency management
 - Development environment setup scripts
+<!-- RELEASE:END 0.1.0 -->
