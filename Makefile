@@ -1,4 +1,4 @@
-.PHONY: build sign build-signed release-sign notarize-release test test-mcp-servers clean install release fmt vet lint deps sync-config check-config check
+.PHONY: build sign build-signed release-sign notarize-release test test-mcp-servers clean install release fmt vet lint deps sync-config check-config check ci
 
 # Default target
 all: build
@@ -180,6 +180,10 @@ check:
 	@$(MAKE) --no-print-directory build
 	@echo "✓ Full checks complete"
 
+ci:
+	@$(MAKE) --no-print-directory check
+	@echo "✓ CI checks passed"
+
 # Pre-push validation (replicates GitHub Actions checks)
 pre-push:
 	@echo "Running pre-push validation..."
@@ -272,6 +276,7 @@ help:
 	@echo "  vet            - Run go vet"
 	@echo "  lint           - Lint code"
 	@echo "  check          - Run full checks (fmt, vet, lint, test, build)"
+	@echo "  ci             - Run CI checks (full pipeline)"
 	@echo "  pre-push       - Run pre-push validation (replicates GitHub Actions)"
 	@echo "  install-hooks  - Install git pre-push hook"
 	@echo "  uninstall-hooks- Remove git pre-push hook"
