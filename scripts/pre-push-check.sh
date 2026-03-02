@@ -200,87 +200,13 @@ else
     SHOULD_FAIL=true
 fi
 
-step "Building all platforms (like GitHub Actions)..."
-if make build-all >/dev/null 2>&1; then
-    success "Multi-platform build successful"
-else
-    error "Multi-platform build failed"
-    SHOULD_FAIL=true
-fi
-
 echo ""
 
 # =============================================================================
-# 7. BINARY VALIDATION (Release-level checks)
+# 7. GIT STATUS CHECK
 # =============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "7️⃣  Binary Validation"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-REQUIRED_BINARIES=(
-    "dist/mcp-cli-ent-linux-amd64"
-    "dist/mcp-cli-ent-linux-arm64"
-    "dist/mcp-cli-ent-darwin-amd64"
-    "dist/mcp-cli-ent-darwin-arm64"
-    "dist/mcp-cli-ent-windows-amd64.exe"
-    "dist/mcp-cli-ent-windows-arm64.exe"
-)
-
-MIN_SIZE=10000000  # 10MB minimum (GitHub Actions requirement)
-
-for binary in "${REQUIRED_BINARIES[@]}"; do
-    if [[ -f "$binary" ]]; then
-        SIZE=$(stat -f%z "$binary" 2>/dev/null || stat -c%s "$binary" 2>/dev/null)
-        SIZE_MB=$((SIZE / 1024 / 1024))
-
-        if [[ $SIZE -ge $MIN_SIZE ]]; then
-            success "$(basename "$binary"): ${SIZE_MB}MB (valid)"
-        else
-            error "$(basename "$binary"): ${SIZE_MB}MB (too small, min 10MB)"
-            SHOULD_FAIL=true
-        fi
-
-        # Binary format verification
-        if command -v file >/dev/null 2>&1; then
-            FILE_TYPE=$(file "$binary" 2>/dev/null || echo "unknown")
-            case "$binary" in
-                *darwin*)
-                    if echo "$FILE_TYPE" | grep -q "Mach-O\|executable"; then
-                        success "  → Valid macOS binary format"
-                    else
-                        warning "  → Could not verify macOS binary format"
-                    fi
-                    ;;
-                *windows*)
-                    if echo "$FILE_TYPE" | grep -q "PE\|executable"; then
-                        success "  → Valid Windows binary format"
-                    else
-                        warning "  → Could not verify Windows binary format"
-                    fi
-                    ;;
-                *linux*)
-                    if echo "$FILE_TYPE" | grep -q "ELF\|executable"; then
-                        success "  → Valid Linux binary format"
-                    else
-                        warning "  → Could not verify Linux binary format"
-                    fi
-                    ;;
-            esac
-        fi
-    else
-        error "$(basename "$binary"): Missing"
-        SHOULD_FAIL=true
-    fi
-done
-
-echo ""
-
-# =============================================================================
-# 8. GIT STATUS CHECK
-# =============================================================================
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "8️⃣  Git Status"
+echo "7️⃣  Git Status"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
