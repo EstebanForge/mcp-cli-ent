@@ -85,7 +85,7 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.9.0
+          version: v2.10.1
           args: --timeout=5m
 
       - name: Check config sync
@@ -93,7 +93,7 @@ jobs:
 
       - name: Build release binaries
         run: |
-          make build-release
+          make release-all
           ls -la dist/
 
       - name: Optional release signing and notarization
