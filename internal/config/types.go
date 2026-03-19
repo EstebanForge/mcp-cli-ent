@@ -44,14 +44,31 @@ type ServerStatus struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// getEnvWithFallback retrieves an environment variable with an ENT_ prefix fallback.
+// First checks the unprefixed variable (e.g., CONTEXT7_API_KEY), then falls back
+// to the ENT_ prefixed version (e.g., ENT_CONTEXT7_API_KEY) if the first is empty.
+func getEnvWithFallback(varName string) string {
+	// Try the unprefixed version first
+	if value := os.Getenv(varName); value != "" {
+		return value
+	}
+	// Fall back to ENT_ prefixed version
+	entVarName := "ENT_" + varName
+	if value := os.Getenv(entVarName); value != "" {
+		return value
+	}
+	return ""
+}
+
 // ResolveEnvironmentVariables substitutes environment variables in string values
-// Supports ${VAR_NAME} and $VAR_NAME formats
+// Supports ${VAR_NAME} and $VAR_NAME formats.
+// For each variable, it checks the unprefixed name first, then falls back to ENT_ prefixed.
 func ResolveEnvironmentVariables(input string) string {
 	// Match ${VAR_NAME} pattern
 	re := regexp.MustCompile(`\$\{([^}]+)\}`)
 	result := re.ReplaceAllStringFunc(input, func(match string) string {
 		varName := strings.Trim(match, "${}")
-		if value := os.Getenv(varName); value != "" {
+		if value := getEnvWithFallback(varName); value != "" {
 			return value
 		}
 		return match // Keep original if environment variable not found
@@ -61,7 +78,7 @@ func ResolveEnvironmentVariables(input string) string {
 	re2 := regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
 	result = re2.ReplaceAllStringFunc(result, func(match string) string {
 		varName := strings.Trim(match, "$")
-		if value := os.Getenv(varName); value != "" {
+		if value := getEnvWithFallback(varName); value != "" {
 			return value
 		}
 		return match // Keep original if environment variable not found

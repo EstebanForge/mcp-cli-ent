@@ -21,7 +21,7 @@ SIGN_IDENTITY?=-
 
 # Lint
 GOLANGCI_LINT_BIN ?= golangci-lint
-GOLANGCI_LINT_VERSION ?= 2.10.1
+GOLANGCI_LINT_VERSION ?= 2.11.3
 LINT_TIMEOUT ?= 5m
 
 help: ## Show this help message

@@ -2,6 +2,16 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.1.0 -->
+## [1.1.0] - 2026-03-19
+
+### Added
+
+- **Environment Variable Fallback**: For each `${VAR_NAME}` in config, the CLI now checks the unprefixed variable first (e.g., `CONTEXT7_API_KEY`), then falls back to the `ENT_` prefixed version (e.g., `ENT_CONTEXT7_API_KEY`) if the first is empty. This provides backward compatibility while supporting the preferred unprefixed naming convention.
+
+<!-- RELEASE:END 1.1.0 -->
+---
+
 <!-- RELEASE:START 1.0.0 -->
 ## [1.0.0] - 2026-01-20
 

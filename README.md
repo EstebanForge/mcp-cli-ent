@@ -162,18 +162,23 @@ Use `${VAR_NAME}` or `$VAR_NAME` in values:
 
 ```json
 {
-  "args": ["--api-key", "${ENT_CONTEXT7_API_KEY}"],
+  "args": ["--api-key", "${CONTEXT7_API_KEY}"],
   "env": { "API_KEY": "$MY_API_KEY" },
   "headers": { "Authorization": "Bearer ${TOKEN}" }
 }
 ```
 
+**Fallback Behavior**: For each variable, the CLI checks the unprefixed name first (e.g., `CONTEXT7_API_KEY`), then falls back to the `ENT_` prefixed version (e.g., `ENT_CONTEXT7_API_KEY`) if the first is empty. This prevents conflicts with existing environment variables.
+
 ```bash
-# Linux/macOS
+# Linux/macOS - either format works
+export CONTEXT7_API_KEY="your_key"
+# or
 export ENT_CONTEXT7_API_KEY="your_key"
-export ENT_BRAVE_API_KEY="your_key"
 
 # Windows PowerShell
+$env:CONTEXT7_API_KEY = "your_key"
+# or
 $env:ENT_CONTEXT7_API_KEY = "your_key"
 ```
 
