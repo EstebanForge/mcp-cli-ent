@@ -23,7 +23,9 @@ func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error) {
 			if missing := unresolvedEnvVars(serverConfig.Env); len(missing) > 0 {
 				return nil, &ClientError{fmt.Sprintf("missing required environment variables: %s", strings.Join(missing, ", "))}
 			}
-			return NewHTTPProcessClient(serverConfig.Command, serverConfig.Args, serverConfig.Env, serverConfig.URL, clientConfig)
+			// Inject mcp-remote header if needed for HTTP process clients
+			args := injectMcpRemoteHeader(serverConfig.Command, serverConfig.Args)
+			return NewHTTPProcessClient(serverConfig.Command, args, serverConfig.Env, serverConfig.URL, clientConfig)
 		}
 		return NewHTTPClient(serverConfig.URL, clientConfig), nil
 	} else if serverConfig.Command != "" {
@@ -31,11 +33,58 @@ func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error) {
 			return nil, &ClientError{fmt.Sprintf("missing required environment variables: %s", strings.Join(missing, ", "))}
 		}
 
-		// Stdio client
-		return NewStdioClient(serverConfig.Command, serverConfig.Args, serverConfig.Env)
+		// Stdio client - inject mcp-remote header if needed
+		args := injectMcpRemoteHeader(serverConfig.Command, serverConfig.Args)
+		return NewStdioClient(serverConfig.Command, args, serverConfig.Env)
 	}
 
 	return nil, &ClientError{"invalid server configuration: neither URL nor command specified"}
+}
+
+// injectMcpRemoteHeader automatically adds the required Accept header for mcp-remote HTTP connections
+func injectMcpRemoteHeader(command string, args []string) []string {
+	// Check if this is an npx mcp-remote command
+	if command != "npx" && command != "npm" {
+		return args
+	}
+
+	// Find mcp-remote in args
+	mcpRemoteIdx := -1
+	for i, arg := range args {
+		if strings.Contains(arg, "mcp-remote") {
+			mcpRemoteIdx = i
+			break
+		}
+	}
+	if mcpRemoteIdx == -1 {
+		return args
+	}
+
+	// Check if --header is already present
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--header") {
+			return args // User already specified custom headers
+		}
+	}
+
+	// Find the URL (starts with http:// or https://)
+	urlIdx := -1
+	for i := mcpRemoteIdx; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "http://") || strings.HasPrefix(args[i], "https://") {
+			urlIdx = i
+			break
+		}
+	}
+	if urlIdx == -1 {
+		return args
+	}
+
+	// Insert --header before the URL
+	result := make([]string, 0, len(args)+2)
+	result = append(result, args[:urlIdx]...)
+	result = append(result, "--header", "Accept:application/json,text/event-stream")
+	result = append(result, args[urlIdx:]...)
+	return result
 }
 
 // ClientError represents an error in client creation or operation

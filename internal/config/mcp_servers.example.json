@@ -36,7 +36,7 @@
       "enabled": true,
       "description": "Repository documentation from public Git repos",
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.deepwiki.com/sse"],
+      "args": ["-y", "mcp-remote", "https://mcp.deepwiki.com/mcp"],
       "persistent": false,
       "timeout": 30
     },

@@ -2,6 +2,19 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.1.1 -->
+## [1.1.1] - 2026-03-19
+
+### Fixed
+
+- **Deepwiki MCP Server**: Fixed connection failure by updating endpoint from deprecated `/sse` to `/mcp` and automatically injecting the required `Accept: application/json,text/event-stream` header for all mcp-remote connections.
+
+### Changed
+
+- **Auto Header Injection**: The CLI now automatically adds the required Accept header for mcp-remote HTTP connections, eliminating the need for users to manually configure headers in their configs.
+
+<!-- RELEASE:END 1.1.1 -->
+
 <!-- RELEASE:START 1.1.0 -->
 ## [1.1.0] - 2026-03-19
 

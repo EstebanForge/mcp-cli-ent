@@ -72,7 +72,7 @@ func EnsureConfigDirectory() error {
 				},
 				"deepwiki": {
 					Command: "npx",
-					Args:    []string{"-y", "mcp-remote", "https://mcp.deepwiki.com/sse"},
+					Args:    []string{"-y", "mcp-remote", "https://mcp.deepwiki.com/mcp"},
 					Timeout: 30,
 				},
 			},
