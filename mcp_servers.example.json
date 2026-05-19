@@ -59,6 +59,19 @@
       "persistent": false,
       "timeout": 30
     },
+    "ai-vision-mcp": {
+      "enabled": false,
+      "description": "Image and video analysis via AI vision models (Gemini)",
+      "command": "npx",
+      "args": ["ai-vision-mcp"],
+      "env": {
+        "IMAGE_PROVIDER": "google",
+        "VIDEO_PROVIDER": "google",
+        "GEMINI_API_KEY": "${ENT_GEMINI_API_KEY}"
+      },
+      "persistent": false,
+      "timeout": 60
+    },
     "cipher": {
       "enabled": false,
       "description": "Memory layer for coding agents: auto-generate AI memories, IDE switching, team sharing",
