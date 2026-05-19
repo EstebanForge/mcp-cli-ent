@@ -1,4 +1,4 @@
-.PHONY: all build build-release sign build-signed release-sign notarize-release \
+.PHONY: all build build-release sign build-signed install-local release-sign notarize-release \
 	build-all build-linux build-linux-arm build-darwin build-darwin-arm build-windows build-windows-arm \
 	release-all release-linux release-linux-arm release-darwin release-darwin-arm release-windows release-windows-arm \
 	test test-coverage test-mcp-servers clean install release set-version \
@@ -53,7 +53,13 @@ sign: build ## Sign local binary (macOS only)
 		echo "ℹ️  Skipping sign (non-macOS)"; \
 	fi
 
-build-signed: build sign ## Build and sign local binary (macOS)
+install-local: ## Install binary to ~/.local/bin
+	@echo "Installing ${BINARY_NAME} to ~/.local/bin..."
+	@mkdir -p ~/.local/bin
+	cp ${BINARY_PATH} ~/.local/bin/${BINARY_NAME}
+	@echo "✓ Installed: ~/.local/bin/${BINARY_NAME}"
+
+build-signed: build sign install-local ## Build, sign, and install to ~/.local/bin (macOS)
 
 release-sign: ## Sign macOS release binaries in dist/ (optional; set RELEASE_SIGN=1)
 	@if [ "$${RELEASE_SIGN:-0}" != "1" ]; then \
