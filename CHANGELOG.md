@@ -2,6 +2,17 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.1.2 -->
+## [1.1.2] - 2026-05-19
+
+### Fixed
+
+- **Deepwiki endpoint**: Updated default config URL from deprecated `/sse` to `/mcp` for `mcp-remote` connections.
+- **Stdio notification handling**: `sendRequest` now skips MCP notifications (lines with no `id` field) instead of mistaking them for responses. Fixes servers like `ai-vision-mcp` that emit `notifications/message` on startup, which previously caused a spurious "no result received" error on `tools/list`.
+- **golangci-lint version pin**: Bumped required version from `2.11.3` to `2.12.2` to match installed toolchain.
+
+<!-- RELEASE:END 1.1.2 -->
+
 <!-- RELEASE:START 1.1.1 -->
 ## [1.1.1] - 2026-03-19
 

@@ -409,6 +409,11 @@ func (c *StdioClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) 
 			continue
 		}
 
+		// Skip notifications (no id field) -- they are not responses to our request
+		if rpcResp.ID == nil {
+			continue
+		}
+
 		if rpcResp.Error != nil {
 			return nil, fmt.Errorf("JSON-RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
 		}
