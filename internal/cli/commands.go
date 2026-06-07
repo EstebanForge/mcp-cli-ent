@@ -58,8 +58,9 @@ If omitted, lists tools from all enabled servers.`,
 }
 
 var callToolCmd = &cobra.Command{
-	Use:   "call-tool <server-name> <tool-name> [arguments]",
-	Short: "Call a specific tool on an MCP server",
+	Use:     "call <server-name> <tool-name> [arguments]",
+	Aliases: []string{"call-tool"},
+	Short:   "Call a specific tool on an MCP server",
 	Long: `Call a specific tool on an MCP server with optional JSON arguments.
 Arguments should be a valid JSON string, e.g., '{"libraryName": "react"}'`,
 	Args: cobra.RangeArgs(2, 3),
@@ -476,15 +477,15 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 		exampleArgs := BuildExampleArgs(&tool)
 		if verbose {
 			if exampleArgs == "'{}'" {
-				fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n\n", serverName, tool.Name)
+				fmt.Printf("    call: mcp-cli-ent call %s %s\n\n", serverName, tool.Name)
 			} else {
-				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n\n", serverName, tool.Name, exampleArgs)
+				fmt.Printf("    call: mcp-cli-ent call %s %s %s\n\n", serverName, tool.Name, exampleArgs)
 			}
 		} else {
 			if exampleArgs == "'{}'" {
-				fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n\n", serverName, tool.Name)
+				fmt.Printf("    call: mcp-cli-ent call %s %s\n\n", serverName, tool.Name)
 			} else {
-				fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n\n", serverName, tool.Name, exampleArgs)
+				fmt.Printf("    call: mcp-cli-ent call %s %s %s\n\n", serverName, tool.Name, exampleArgs)
 			}
 		}
 	}

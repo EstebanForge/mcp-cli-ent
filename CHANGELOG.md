@@ -2,6 +2,15 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.2.1 -->
+## [1.2.1] - 2026-06-07
+
+### Added
+
+- **Command Alias (Default)**: Made `call` the default command for calling tools, leaving `call-tool` as a deprecated alias. This matches common developer and agent patterns to prevent wasted turns.
+
+<!-- RELEASE:END 1.2.1 -->
+
 <!-- RELEASE:START 1.2.0 -->
 ## [1.2.0] - 2026-06-07
 

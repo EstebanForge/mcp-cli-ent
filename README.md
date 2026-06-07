@@ -56,7 +56,7 @@ mcp-cli-ent
 mcp-cli-ent list-tools context7
 
 # Call a tool (get library docs via context7)
-mcp-cli-ent call-tool context7 get-library-docs '{
+mcp-cli-ent call context7 get-library-docs '{
   "context7CompatibleLibraryID": "/EstebanForge/hyperpress",
   "query": "how to create a custom block"
 }'
@@ -219,7 +219,7 @@ mcp-cli-ent list-servers --all        # Include disabled servers
 mcp-cli-ent list-tools [server]       # List tools (all or specific server)
 
 # Tool execution
-mcp-cli-ent call-tool <server> <tool> [json-args]
+mcp-cli-ent call <server> <tool> [json-args] (or deprecated alias `call-tool`)
 
 # Configuration
 mcp-cli-ent create-config [filename]  # Create example config
@@ -249,8 +249,8 @@ mcp-cli-ent daemon logs --tail 100    # Show last 100 log lines
 Persistent browser automation (Chrome DevTools, Playwright) works automatically. Just call the tools:
 
 ```bash
-mcp-cli-ent call-tool chrome-devtools navigate_page '{"url": "https://example.com"}'
-mcp-cli-ent call-tool chrome-devtools take_screenshot
+mcp-cli-ent call chrome-devtools navigate_page '{"url": "https://example.com"}'
+mcp-cli-ent call chrome-devtools take_screenshot
 ```
 
 The daemon starts automatically when you use these tools.

@@ -257,7 +257,7 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	}
 
 	fmt.Println("Usage:")
-	fmt.Println("mcp-cli-ent call-tool <server_name> <tool_name> <params>")
+	fmt.Println("mcp-cli-ent call <server_name> <tool_name> <params>")
 	fmt.Println()
 
 	// Display tools
@@ -280,9 +280,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 			exampleArgs := BuildExampleArgs(&tool)
 			var cmdStr string
 			if exampleArgs == "" || exampleArgs == "'{}'" {
-				cmdStr = fmt.Sprintf("mcp-cli-ent call-tool %s %s", serverName, tool.Name)
+				cmdStr = fmt.Sprintf("mcp-cli-ent call %s %s", serverName, tool.Name)
 			} else {
-				cmdStr = fmt.Sprintf("mcp-cli-ent call-tool %s %s %s", serverName, tool.Name, exampleArgs)
+				cmdStr = fmt.Sprintf("mcp-cli-ent call %s %s %s", serverName, tool.Name, exampleArgs)
 			}
 			fmt.Printf("  • %s\n", cmdStr)
 			if verbose && tool.Description != "" {
