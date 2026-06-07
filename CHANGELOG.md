@@ -2,6 +2,17 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.2.0 -->
+## [1.2.0] - 2026-06-07
+
+### Added
+
+- **Agent-Optimized Output**: Tool lists now display full executable command invocations (`mcp-cli-ent call-tool ...`), making it easier for AI agents to call MCP servers in a single copy-paste action.
+- **JSON Schema Parameter Validation**: Build example arguments using correct JSON types (such as `0` for numbers, `true` for booleans, and `[]` for arrays) rather than quoting all values as strings, preventing schema validation failures.
+- **Required Param Prioritization**: Tool help outputs now prioritize required parameters and omit optional parameters by default to minimize context token usage.
+
+<!-- RELEASE:END 1.2.0 -->
+
 <!-- RELEASE:START 1.1.2 -->
 ## [1.1.2] - 2026-05-19
 

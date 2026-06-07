@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +64,8 @@ Use "mcp-cli-ent --help verbose" for detailed information.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
+	autoInstallAlias()
+
 	// Override the help function to include available servers
 	originalHelpFunc := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
@@ -272,24 +275,19 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 			fmt.Printf("%s [%d]\n", displayName, len(tools))
 		}
 
-		// Print each tool with example args
+		// Print each tool with full call example
 		for _, tool := range tools {
 			exampleArgs := BuildExampleArgs(&tool)
-			if exampleArgs == "'{}'" {
-				fmt.Printf("  • %s\n", tool.Name)
+			var cmdStr string
+			if exampleArgs == "" || exampleArgs == "'{}'" {
+				cmdStr = fmt.Sprintf("mcp-cli-ent call-tool %s %s", serverName, tool.Name)
 			} else {
-				fmt.Printf("  • %s %s\n", tool.Name, exampleArgs)
+				cmdStr = fmt.Sprintf("mcp-cli-ent call-tool %s %s %s", serverName, tool.Name, exampleArgs)
 			}
+			fmt.Printf("  • %s\n", cmdStr)
 			if verbose && tool.Description != "" {
 				// In verbose mode, show full description
 				fmt.Printf("    desc: %s\n", tool.Description)
-			}
-			if verbose {
-				if exampleArgs == "'{}'" {
-					fmt.Printf("    call: mcp-cli-ent call-tool %s %s\n", serverName, tool.Name)
-				} else {
-					fmt.Printf("    call: mcp-cli-ent call-tool %s %s %s\n", serverName, tool.Name, exampleArgs)
-				}
 			}
 		}
 		fmt.Println()
@@ -308,7 +306,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	return nil
 }
 
-// BuildExampleArgs creates example JSON arguments based on tool schema
+// BuildExampleArgs creates example JSON arguments based on tool schema.
+// It prioritizes required parameters to keep output concise, and formats
+// properties with correct JSON types (string -> "...", integer -> 0, boolean -> true, etc.).
 func BuildExampleArgs(tool *mcp.Tool) string {
 	if tool == nil || tool.InputSchema == nil {
 		return "'{}'"
@@ -319,28 +319,68 @@ func BuildExampleArgs(tool *mcp.Tool) string {
 		return "'{}'"
 	}
 
-	// Limit to first 4 parameters to keep output concise
-	maxParams := 4
-	count := 0
-	examples := make([]string, 0, min(len(properties), maxParams))
-	for name := range properties {
-		if count >= maxParams {
-			examples = append(examples, "...")
-			break
+	// Extract required properties
+	var requiredList []string
+	if reqs, ok := tool.InputSchema["required"].([]interface{}); ok {
+		for _, req := range reqs {
+			if reqStr, ok := req.(string); ok {
+				requiredList = append(requiredList, reqStr)
+			}
 		}
-		examples = append(examples, fmt.Sprintf(`"%s":"..."`, name))
-		count++
+	}
+
+	// Determine which properties to show
+	var keys []string
+	if len(requiredList) > 0 {
+		// Only show required properties by default to keep context window small
+		keys = requiredList
+		sort.Strings(keys)
+		if len(keys) > 4 {
+			keys = keys[:4]
+		}
+	} else {
+		// No required parameters, show up to 4 optional properties
+		for name := range properties {
+			keys = append(keys, name)
+		}
+		sort.Strings(keys)
+		if len(keys) > 4 {
+			keys = keys[:4]
+		}
+	}
+
+	var examples []string
+	for _, name := range keys {
+		prop, ok := properties[name].(map[string]interface{})
+		if !ok {
+			examples = append(examples, fmt.Sprintf(`"%s":"..."`, name))
+			continue
+		}
+
+		propType, _ := prop["type"].(string)
+		var valStr string
+		switch propType {
+		case "string":
+			valStr = `"..."`
+		case "number", "integer":
+			valStr = "0"
+		case "boolean":
+			valStr = "true"
+		case "array":
+			valStr = "[]"
+		case "object":
+			valStr = "{}"
+		default:
+			valStr = `"..."`
+		}
+		examples = append(examples, fmt.Sprintf(`"%s":%s`, name, valStr))
+	}
+
+	if len(examples) == 0 {
+		return "'{}'"
 	}
 
 	return fmt.Sprintf("'{%s}'", strings.Join(examples, ", "))
-}
-
-// min returns the smaller of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // showAvailableServers displays a simple list of available MCP servers
