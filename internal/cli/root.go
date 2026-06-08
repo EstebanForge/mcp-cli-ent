@@ -25,6 +25,8 @@ var (
 	timeout      int
 	refreshCache bool
 	clearCache   bool
+	humanOutput  bool
+	searchQuery  string
 )
 
 // ToolsCacheEntry represents a cached tool listing for a server
@@ -137,19 +139,17 @@ func SaveToolsToCache(cache *ToolsCache) error {
 
 // showRootHelpWithServers displays available tools from all MCP servers with usage examples
 func showRootHelpWithServers(cmd *cobra.Command) error {
-	fmt.Printf("MCP CLI-Ent v%s\n\n", version.Version)
-
 	// Load configuration
 	configPath := GetConfigPath()
 	cfg, err := LoadConfiguration(configPath)
 	if err != nil {
-		fmt.Println("No configuration found - run 'mcp-cli-ent create-config'")
+		fmt.Fprintln(os.Stderr, "No configuration found - run 'mcp-cli-ent create-config'")
 		return nil
 	}
 
 	enabledServers := cfg.GetEnabledServers()
 	if len(enabledServers) == 0 {
-		fmt.Println("No enabled MCP servers found")
+		fmt.Fprintln(os.Stderr, "No enabled MCP servers found")
 		return nil
 	}
 
@@ -202,8 +202,8 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		// Discover tools from all servers
 		factory, err := getSessionAwareClientFactory()
 		if err != nil {
-			fmt.Printf("Error: failed to create client factory: %v\n", err)
-			fmt.Println("\nRun 'mcp-cli-ent list-servers' to see available servers")
+			fmt.Fprintf(os.Stderr, "Error: failed to create client factory: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Run 'mcp-cli-ent list-servers' to see available servers")
 			return nil
 		}
 
@@ -221,14 +221,14 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 
 				mcpClient, err := factory.CreateClient(name, serverConfig)
 				if err != nil {
-					fmt.Printf("%s: (failed to connect: %v)\n", name, err)
+					fmt.Fprintf(os.Stderr, "%s: (failed to connect: %v)\n", name, err)
 					return
 				}
 
 				tools, err := mcpClient.ListTools(ctx)
 				_ = mcpClient.Close()
 				if err != nil {
-					fmt.Printf("%s: (failed to list tools: %v)\n", name, err)
+					fmt.Fprintf(os.Stderr, "%s: (failed to list tools: %v)\n", name, err)
 					return
 				}
 
@@ -256,54 +256,103 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		_ = SaveToolsToCache(newCache)
 	}
 
-	fmt.Println("Usage:")
-	fmt.Println("mcp-cli-ent call <server_name> <tool_name> <params>")
-	fmt.Println()
+	// Filter by search query if provided
+	if searchQuery != "" {
+		for serverName, tools := range toolsByServer {
+			var filtered []mcp.Tool
+			for _, tool := range tools {
+				if toolMatches(tool, searchQuery) {
+					filtered = append(filtered, tool)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(toolsByServer, serverName)
+			} else {
+				toolsByServer[serverName] = filtered
+			}
+		}
+		// Recount
+		totalTools = 0
+		for _, tools := range toolsByServer {
+			totalTools += len(tools)
+		}
+	}
 
-	// Display tools
-	for serverName, serverConfig := range enabledServers {
+	if totalTools == 0 {
+		if humanOutput {
+			if searchQuery != "" {
+				fmt.Printf("No tools matching '%s' found\n", searchQuery)
+			} else {
+				fmt.Println("No tools found on any server")
+			}
+		} else {
+			if searchQuery != "" {
+				return encodeErrorJSON("no_match", "No tools matching '%s' found", searchQuery)
+			}
+			return encodeErrorJSON("no_tools", "No tools found on any server")
+		}
+		return nil
+	}
+
+	// Output: JSON by default, --human for terminal
+	// Build sorted server keys for deterministic output in both modes
+	var sortedServers []string
+	for serverName := range enabledServers {
+		sortedServers = append(sortedServers, serverName)
+	}
+	sort.Strings(sortedServers)
+
+	if humanOutput {
+		fmt.Printf("MCP CLI-Ent v%s\n\n", version.Version)
+		fmt.Println("Usage:")
+		fmt.Println("mcp-cli-ent call <server_name> <tool_name> <params>")
+		fmt.Println()
+
+		for _, serverName := range sortedServers {
+			serverConfig := enabledServers[serverName]
+			tools, ok := toolsByServer[serverName]
+			if !ok || len(tools) == 0 {
+				continue
+			}
+
+			displayName := fmt.Sprintf("<%s>", serverName)
+			if serverConfig.Description != "" {
+				fmt.Printf("%s (%s) [%d]\n", displayName, serverConfig.Description, len(tools))
+			} else {
+				fmt.Printf("%s [%d]\n", displayName, len(tools))
+			}
+
+			printToolsHuman(tools, serverName, verbose)
+			fmt.Println()
+		}
+
+		fmt.Printf("Total: %d tools across %d servers\n\n", totalTools, len(toolsByServer))
+		fmt.Println("For full specific MCP server details:")
+		fmt.Println("  mcp-cli-ent list-tools <server_name>")
+		fmt.Println("\nUse --verbose for expanded tool details")
+		return nil
+	}
+
+	// JSON output (default): compact index — name + description only
+	// Full details via: mcp-cli-ent list-tools <server>
+	result := make(map[string][]indexTool)
+
+	for _, serverName := range sortedServers {
 		tools, ok := toolsByServer[serverName]
 		if !ok || len(tools) == 0 {
 			continue
 		}
-
-		// Print server name with description if available
-		displayName := fmt.Sprintf("<%s>", serverName)
-		if serverConfig.Description != "" {
-			fmt.Printf("%s (%s) [%d]\n", displayName, serverConfig.Description, len(tools))
-		} else {
-			fmt.Printf("%s [%d]\n", displayName, len(tools))
-		}
-
-		// Print each tool with full call example
 		for _, tool := range tools {
-			exampleArgs := BuildExampleArgs(&tool)
-			var cmdStr string
-			if exampleArgs == "" || exampleArgs == "'{}'" {
-				cmdStr = fmt.Sprintf("mcp-cli-ent call %s %s", serverName, tool.Name)
-			} else {
-				cmdStr = fmt.Sprintf("mcp-cli-ent call %s %s %s", serverName, tool.Name, exampleArgs)
-			}
-			fmt.Printf("  • %s\n", cmdStr)
-			if verbose && tool.Description != "" {
-				// In verbose mode, show full description
-				fmt.Printf("    desc: %s\n", tool.Description)
-			}
+			result[serverName] = append(result[serverName], indexTool{
+				Name:        tool.Name,
+				Description: tool.Description,
+			})
 		}
-		fmt.Println()
 	}
 
-	if totalTools == 0 {
-		fmt.Println("No tools found on any server")
-		return nil
-	}
-
-	fmt.Printf("Total: %d tools across %d servers\n\n", totalTools, len(enabledServers))
-	fmt.Println("For full specific MCP server details:")
-	fmt.Println("  mcp-cli-ent list-tools <server_name>")
-	fmt.Println("\nUse --verbose for tool descriptions")
-
-	return nil
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
 }
 
 // BuildExampleArgs creates example JSON arguments based on tool schema.
@@ -383,6 +432,99 @@ func BuildExampleArgs(tool *mcp.Tool) string {
 	return fmt.Sprintf("'{%s}'", strings.Join(examples, ", "))
 }
 
+// toolMatches checks if a tool matches a search query (case-insensitive substring on name and description)
+func toolMatches(tool mcp.Tool, query string) bool {
+	q := strings.ToLower(query)
+	if strings.Contains(strings.ToLower(tool.Name), q) {
+		return true
+	}
+	if tool.Description != "" && strings.Contains(strings.ToLower(tool.Description), q) {
+		return true
+	}
+	return false
+}
+
+// printToolsHuman prints tools in human-readable format.
+// Default: terse 1-line-per-tool ("name: description").
+// With verbose: expanded 4-line format (desc, params, call).
+func printToolsHuman(tools []mcp.Tool, serverName string, isVerbose bool) {
+	for _, tool := range tools {
+		if isVerbose {
+			fmt.Printf("  • %s\n", tool.Name)
+			if tool.Description != "" {
+				fmt.Printf("    desc: %s\n", tool.Description)
+			}
+			if tool.InputSchema != nil {
+				names := extractParamNames(tool.InputSchema)
+				if len(names) > 0 {
+					fmt.Printf("    params: %s\n", strings.Join(names, ", "))
+				}
+			}
+			exampleArgs := BuildExampleArgs(&tool)
+			fmt.Printf("    call: %s\n\n", buildCallString(serverName, tool.Name, exampleArgs))
+		} else {
+			// Terse: single line per tool
+			if tool.Description != "" {
+				fmt.Printf("  %s: %s\n", tool.Name, tool.Description)
+			} else {
+				fmt.Printf("  %s\n", tool.Name)
+			}
+		}
+	}
+}
+
+// buildCallString constructs the mcp-cli-ent call command string
+func buildCallString(serverName, toolName, exampleArgs string) string {
+	if exampleArgs == "" || exampleArgs == "'{}'" {
+		return fmt.Sprintf("mcp-cli-ent call %s %s", serverName, toolName)
+	}
+	return fmt.Sprintf("mcp-cli-ent call %s %s %s", serverName, toolName, exampleArgs)
+}
+
+// extractParamNames extracts parameter names from a tool's input schema
+func extractParamNames(schema map[string]interface{}) []string {
+	if schema == nil {
+		return nil
+	}
+	properties, ok := schema["properties"].(map[string]interface{})
+	if !ok || len(properties) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// JSONTool represents a tool in structured JSON output.
+// Shared by list-tools (single server) and root command (all servers).
+type JSONTool struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Params      []string               `json:"params,omitempty"`
+	Call        string                 `json:"call"`
+	Schema      map[string]interface{} `json:"schema,omitempty"`
+}
+
+// indexTool is a compact tool entry for the bare-invocation discovery index.
+type indexTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// encodeErrorJSON writes a structured JSON error to stdout.
+func encodeErrorJSON(code, format string, args ...interface{}) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(map[string]interface{}{
+		"error":             true,
+		"error_code":        code,
+		"error_description": fmt.Sprintf(format, args...),
+	})
+}
+
 // showAvailableServers displays a simple list of available MCP servers
 func showAvailableServers(cmd *cobra.Command) error {
 	// Load configuration
@@ -415,16 +557,20 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "configuration file path (default is mcp_servers.json)")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (full schema in JSON, expanded details in --human)")
 	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 30, "request timeout in seconds")
 	rootCmd.PersistentFlags().BoolVar(&refreshCache, "refresh", false, "force refresh of tools cache (alias: --clear-cache)")
 	rootCmd.PersistentFlags().BoolVar(&clearCache, "clear-cache", false, "clear tools cache (alias: --refresh)")
+	rootCmd.PersistentFlags().BoolVar(&humanOutput, "human", false, "human-readable terminal output (default is JSON)")
+	rootCmd.PersistentFlags().StringVar(&searchQuery, "search", "", "filter tools by name or description (case-insensitive)")
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 	_ = viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
 	_ = viper.BindPFlag("refresh", rootCmd.PersistentFlags().Lookup("refresh"))
 	_ = viper.BindPFlag("clear-cache", rootCmd.PersistentFlags().Lookup("clear-cache"))
+	_ = viper.BindPFlag("human", rootCmd.PersistentFlags().Lookup("human"))
+	_ = viper.BindPFlag("search", rootCmd.PersistentFlags().Lookup("search"))
 }
 
 // initConfig reads in config file and ENV variables if set.

@@ -385,11 +385,6 @@ func runListTools(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("server '%s' is disabled", serverName)
 		}
 
-		// Display server description if available
-		if serverConfig.Description != "" {
-			fmt.Printf("%s - %s\n\n", serverName, serverConfig.Description)
-		}
-
 		return listToolsFromServer(ctx, serverName, serverConfig)
 	}
 }
@@ -452,44 +447,60 @@ func listToolsFromServer(ctx context.Context, serverName string, serverConfig co
 	}
 
 	if len(tools) == 0 {
-		fmt.Println("No tools found.")
+		if humanOutput {
+			fmt.Println("No tools found.")
+		} else {
+			return encodeErrorJSON("no_tools", "No tools found on %s", serverName)
+		}
 		return nil
 	}
 
-	fmt.Printf("Available tools (%d):\n", len(tools))
-	for _, tool := range tools {
-		fmt.Printf("  • %s\n", tool.Name)
-		if tool.Description != "" {
-			fmt.Printf("    desc: %s\n", tool.Description)
-		}
-		if tool.InputSchema != nil {
-			if properties, ok := tool.InputSchema["properties"].(map[string]interface{}); ok {
-				var paramNames []string
-				for name := range properties {
-					paramNames = append(paramNames, name)
-				}
-				if len(paramNames) > 0 {
-					fmt.Printf("    params: %s\n", strings.Join(paramNames, ", "))
-				}
+	// Filter by search query
+	if searchQuery != "" {
+		var filtered []mcp.Tool
+		for _, tool := range tools {
+			if toolMatches(tool, searchQuery) {
+				filtered = append(filtered, tool)
 			}
 		}
-		// Build and display call example
-		exampleArgs := BuildExampleArgs(&tool)
-		if verbose {
-			if exampleArgs == "'{}'" {
-				fmt.Printf("    call: mcp-cli-ent call %s %s\n\n", serverName, tool.Name)
+		if len(filtered) == 0 {
+			if humanOutput {
+				fmt.Printf("No tools matching '%s' found on %s.\n", searchQuery, serverName)
 			} else {
-				fmt.Printf("    call: mcp-cli-ent call %s %s %s\n\n", serverName, tool.Name, exampleArgs)
+				return encodeErrorJSON("no_match", "No tools matching '%s' found on %s", searchQuery, serverName)
 			}
-		} else {
-			if exampleArgs == "'{}'" {
-				fmt.Printf("    call: mcp-cli-ent call %s %s\n\n", serverName, tool.Name)
-			} else {
-				fmt.Printf("    call: mcp-cli-ent call %s %s %s\n\n", serverName, tool.Name, exampleArgs)
-			}
+			return nil
 		}
+		tools = filtered
 	}
 
+	// JSON output by default
+	if !humanOutput {
+		result := make([]JSONTool, 0, len(tools))
+		for _, tool := range tools {
+			jt := JSONTool{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Params:      extractParamNames(tool.InputSchema),
+				Call:        buildCallString(serverName, tool.Name, BuildExampleArgs(&tool)),
+			}
+			if verbose {
+				jt.Schema = tool.InputSchema
+			}
+			result = append(result, jt)
+		}
+
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	// Human-readable output (terse by default, verbose expands)
+	if serverConfig.Description != "" {
+		fmt.Printf("%s - %s\n\n", serverName, serverConfig.Description)
+	}
+	fmt.Printf("Available tools (%d):\n", len(tools))
+	printToolsHuman(tools, serverName, verbose)
 	return nil
 }
 

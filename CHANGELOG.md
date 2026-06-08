@@ -2,6 +2,29 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.2.2 -->
+## [1.2.2] - 2026-06-08
+
+### Changed
+
+- **JSON is now the default output format** for `list-tools` and bare `mcp-cli-ent` invocation. Agents parse structured JSON natively; `--human` flag switches to terminal-readable output.
+- **Terse human output by default**: `--human` output shows one line per tool (`name: description`). Use `--human --verbose` for expanded 4-line format (desc, params, call).
+- **Dead verbose branch removed**: The `if verbose`/`else` block in `listToolsFromServer` produced identical output regardless of flag. Deleted.
+
+### Added
+
+- **`--human` flag**: Switches from JSON to human-readable terminal output.
+- **`--search <query>` flag**: Filters tools by name or description (case-insensitive substring). Works in both JSON and human modes.
+- **`--verbose` now includes full schema**: In JSON mode, `--verbose` adds the complete `inputSchema` for each tool.
+
+### Fixed
+
+- **Server count after search**: `--human --search` now reports the correct number of matching servers instead of total configured servers.
+- **Deterministic JSON output**: Server keys are now sorted alphabetically for stable, diff-friendly output.
+- **Shared `JSONTool` type**: Extracted from local duplicates in `commands.go` and `root.go` to a single package-level type, preventing silent output contract divergence.
+
+<!-- RELEASE:END 1.2.2 -->
+
 <!-- RELEASE:START 1.2.1 -->
 ## [1.2.1] - 2026-06-07
 
