@@ -29,10 +29,13 @@ var (
 	searchQuery  string
 )
 
-// ToolsCacheEntry represents a cached tool listing for a server
+// ToolsCacheEntry represents a cached tool listing for a server.
+// Failed entries act as a short-lived negative cache so a broken server
+// does not force a full re-discovery on every invocation.
 type ToolsCacheEntry struct {
 	Tools      []mcp.Tool `json:"tools"`
 	LastUpdate time.Time  `json:"lastUpdate"`
+	Failed     bool       `json:"failed,omitempty"`
 }
 
 // ToolsCache represents the full cache structure
@@ -41,8 +44,9 @@ type ToolsCache struct {
 }
 
 const (
-	CacheFileName = "tools_cache.json"
-	CacheTTL      = 30 * 24 * time.Hour // Cache expires after 30 days
+	CacheFileName    = "tools_cache.json"
+	CacheTTL         = 30 * 24 * time.Hour // Successful entries expire after 30 days
+	NegativeCacheTTL = 5 * time.Minute     // Failed entries: retry the server after 5 min
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -153,53 +157,56 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// If clearCache or refreshCache is set, clear cache file
-	// These flags are aliases - both trigger cache refresh
+	// --refresh / --clear-cache are aliases. They force live discovery for
+	// enabled servers, whose fresh results overwrite only their own cache
+	// keys. The file itself is never deleted, so dormant/disabled servers
+	// keep their cached entries (true merge semantics).
 	if clearCache || refreshCache {
-		cachePath, err := GetCachePath()
-		if err == nil {
-			_ = os.Remove(cachePath)
-			fmt.Println("Cache cleared.")
-		}
-		// Force refresh after clearing
 		refreshCache = true
 		clearCache = true
 	}
 
+	// Load existing cache. We MERGE into it rather than overwrite, so a
+	// transient failure on one server never evicts good entries for others.
 	cache, err := LoadToolsFromCache()
-	if err != nil {
-		cache = nil
+	if err != nil || cache == nil {
+		cache = &ToolsCache{Servers: make(map[string]ToolsCacheEntry)}
 	}
-	useCache := cache != nil && !refreshCache && !clearCache
-
-	var totalTools int
-	var toolsByServer map[string][]mcp.Tool
-
-	if useCache {
-		// Check if all servers are in cache
-		toolsByServer = make(map[string][]mcp.Tool)
-		allCached := true
-		for serverName := range enabledServers {
-			if entry, ok := cache.Servers[serverName]; ok {
-				toolsByServer[serverName] = entry.Tools
-			} else {
-				allCached = false
-				break
-			}
-		}
-
-		if !allCached {
-			useCache = false
-		} else {
-			// Count tools from cache
-			for _, tools := range toolsByServer {
-				totalTools += len(tools)
-			}
-		}
+	if cache.Servers == nil {
+		cache.Servers = make(map[string]ToolsCacheEntry)
 	}
 
-	if !useCache {
-		// Discover tools from all servers
+	toolsByServer := make(map[string][]mcp.Tool)
+	var toDiscover []string
+	now := time.Now()
+
+	// Partition enabled servers: serve valid cache hits immediately, queue
+	// the rest (missing, expired, or failed-past-TTL) for live discovery.
+	for serverName := range enabledServers {
+		entry, cached := cache.Servers[serverName]
+		if cached && !refreshCache && !clearCache {
+			ttl := CacheTTL
+			if entry.Failed {
+				ttl = NegativeCacheTTL
+			}
+			if now.Sub(entry.LastUpdate) <= ttl {
+				// Still valid. Negative entries yield no tools but are
+				// surfaced so a failing server does not vanish silently.
+				if entry.Failed {
+					fmt.Fprintf(os.Stderr, "%s: (skipped: recently failed; retry in %s or use --refresh)\n",
+						serverName, (ttl - now.Sub(entry.LastUpdate)).Round(time.Second))
+				} else {
+					toolsByServer[serverName] = entry.Tools
+				}
+				continue
+			}
+		}
+		toDiscover = append(toDiscover, serverName)
+	}
+
+	// Discover only what we could not serve from cache. Each worker gets its
+	// own deadline so one hanging server cannot stall the whole invocation.
+	if len(toDiscover) > 0 {
 		factory, err := getSessionAwareClientFactory()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to create client factory: %v\n", err)
@@ -207,21 +214,28 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 			return nil
 		}
 
-		toolsByServer = make(map[string][]mcp.Tool)
 		var wg sync.WaitGroup
 		var mu sync.Mutex
-
-		// Start workers for parallel discovery
-		for serverName := range enabledServers {
+		for _, name := range toDiscover {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
-				ctx := context.Background()
 				serverConfig := enabledServers[name]
+
+				// Honor a server-specific timeout if set, else the global flag.
+				serverTimeout := timeout
+				if serverConfig.Timeout > 0 {
+					serverTimeout = serverConfig.Timeout
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(serverTimeout)*time.Second)
+				defer cancel()
 
 				mcpClient, err := factory.CreateClient(name, serverConfig)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s: (failed to connect: %v)\n", name, err)
+					mu.Lock()
+					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
+					mu.Unlock()
 					return
 				}
 
@@ -229,31 +243,30 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				_ = mcpClient.Close()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s: (failed to list tools: %v)\n", name, err)
+					mu.Lock()
+					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
+					mu.Unlock()
 					return
 				}
 
 				mu.Lock()
 				toolsByServer[name] = tools
+				cache.Servers[name] = ToolsCacheEntry{Tools: tools, LastUpdate: time.Now()}
 				mu.Unlock()
-			}(serverName)
+			}(name)
 		}
-
-		// Wait for all workers to complete
 		wg.Wait()
 
-		// Count total tools and build cache
-		totalTools = 0
-		newCache := &ToolsCache{Servers: make(map[string]ToolsCacheEntry)}
-		for serverName, tools := range toolsByServer {
-			totalTools += len(tools)
-			newCache.Servers[serverName] = ToolsCacheEntry{
-				Tools:      tools,
-				LastUpdate: time.Now(),
-			}
+		// Persist the merged cache: fresh successes + retained hits + new
+		// negative entries. A sibling failure never drops a good entry.
+		if err := SaveToolsToCache(cache); err != nil && verbose {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save tools cache: %v\n", err)
 		}
+	}
 
-		// Save to cache
-		_ = SaveToolsToCache(newCache)
+	totalTools := 0
+	for _, tools := range toolsByServer {
+		totalTools += len(tools)
 	}
 
 	// Filter by search query if provided

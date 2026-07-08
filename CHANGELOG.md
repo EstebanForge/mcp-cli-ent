@@ -2,6 +2,20 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.3.0 -->
+## [1.3.0] - 2026-07-08
+
+### Fixed
+
+- **Tools cache no longer thrashes on every invocation.** Bare `mcp-cli-ent` was re-discovering tools from all servers on every call (20-30s per invocation) because the cache gate required every enabled server to be present. A single failing server made the whole cache unusable. The discovery path now serves valid cache hits instantly and only contacts servers that are missing, expired, or past their negative-cache window.
+- **Negative caching with visibility.** Servers that fail to connect are cached as failed for 5 minutes so they stop forcing full re-discovery. They are no longer dropped silently: a stderr line (`<server>: (skipped: recently failed; retry in <duration> or use --refresh)`) reports their status instead of letting them vanish from the output.
+- **Cache is now merged, not overwritten.** Previously `SaveToolsToCache` wrote only the current run's successes, evicting previously-good entries on any transient failure (the cache shrank over time). The cache map is now updated in place, so a sibling failure never drops a good entry for another server.
+- **`--clear-cache` / `--refresh` no longer delete the cache file.** They force live discovery for enabled servers, whose fresh results overwrite only their own keys. Cached entries for dormant or disabled servers are preserved.
+- **Per-worker discovery timeout now honors server config.** Each discovery worker gets a `context.WithTimeout` that prefers `serverConfig.Timeout` and falls back to the global `--timeout` flag, so one hanging server can no longer stall the whole invocation up to the 30s transport default.
+- **Cache write failures surface under `--verbose`.** A failed `SaveToolsToCache` previously failed silently, causing mysterious perpetual slowness; it now logs a warning.
+
+<!-- RELEASE:END 1.3.0 -->
+
 <!-- RELEASE:START 1.2.2 -->
 ## [1.2.2] - 2026-06-08
 
