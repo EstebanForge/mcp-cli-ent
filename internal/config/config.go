@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
 )
 
 // Embedded example configuration - keep in sync with root mcp_servers.example.json
@@ -187,6 +189,14 @@ func ValidateConfig(config *Configuration) error {
 	for name, server := range config.MCPServers {
 		if err := server.Validate(); err != nil {
 			return fmt.Errorf("server '%s': %w", name, err)
+		}
+		// Warn on unrecognized protocolVersion values; they are treated as auto.
+		if server.ProtocolVersion != "" && server.ProtocolVersion != "auto" && !mcp.IsKnownVersion(server.ProtocolVersion) {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: server '%s': unknown protocolVersion %q; treating as auto\n", name, server.ProtocolVersion)
+		}
+		// Legacy era needs a held initialize connection; it cannot be stateless.
+		if server.Session.Type == "stateless" && mcp.ClassifyEra(server.ResolvedProtocolVersion()) == mcp.EraLegacy {
+			return fmt.Errorf("server '%s': protocolVersion %q (legacy) is incompatible with session.type \"stateless\"; use \"persistent\" or pin protocolVersion to \"2026-07-28\"", name, server.ResolvedProtocolVersion())
 		}
 	}
 

@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
@@ -15,10 +18,13 @@ import (
 
 // HTTPClient implements MCPClient for HTTP-based MCP servers
 type HTTPClient struct {
-	client  *http.Client
-	baseURL string
-	headers map[string]string
-	timeout time.Duration
+	client       *http.Client
+	baseURL      string
+	headers      map[string]string
+	timeout      time.Duration
+	era          mcp.Era
+	capabilities mcp.ClientCapabilities
+	once         sync.Once
 }
 
 // NewHTTPClient creates a new HTTP MCP client
@@ -32,9 +38,11 @@ func NewHTTPClient(url string, config *mcp.ClientConfig) *HTTPClient {
 		client: &http.Client{
 			Timeout: timeout,
 		},
-		baseURL: url,
-		headers: config.Headers,
-		timeout: timeout,
+		baseURL:      url,
+		headers:      config.Headers,
+		timeout:      timeout,
+		era:          mcp.ClassifyEra(config.ProtocolVersion), // Unknown => auto-detect
+		capabilities: mcp.ClientCapabilities{},
 	}
 }
 
@@ -277,7 +285,73 @@ func (c *HTTPClient) Close() error {
 
 // sendRequest sends a JSON-RPC request to the MCP server
 func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (interface{}, error) {
+	// Detect era once for auto-pinned servers, then shape the request.
+	c.once.Do(func() {
+		if c.era == mcp.EraUnknown {
+			c.detectEra(ctx)
+		}
+	})
+	if c.era == mcp.EraModern {
+		if err := mcp.InjectMeta(req, c.capabilities); err != nil {
+			return nil, err
+		}
+	}
 	return c.sendRequestWithURL(ctx, req, c.baseURL, false)
+}
+
+// detectEra probes the server once with a modern server/discover request and
+// caches the verdict. Best-effort: on transport failure it defaults to legacy.
+func (c *HTTPClient) detectEra(ctx context.Context) {
+	probe := mcp.NewRequest("era-probe", "server/discover", nil)
+	if err := mcp.InjectMeta(probe, c.capabilities); err != nil {
+		c.fallbackLegacy("inject _meta: %v", err)
+		return
+	}
+	reqBytes, err := mcp.MarshalRequest(probe)
+	if err != nil {
+		c.fallbackLegacy("marshal probe: %v", err)
+		return
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewBuffer(reqBytes))
+	if err != nil {
+		c.fallbackLegacy("build probe request: %v", err)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+	httpReq.Header.Set(mcp.HeaderProtocolVersion, mcp.ProtocolVersion)
+	httpReq.Header.Set(mcp.HeaderMethod, "server/discover")
+	for k, v := range c.headers {
+		httpReq.Header.Set(k, v)
+	}
+	resp, err := c.client.Do(httpReq)
+	if err != nil {
+		c.fallbackLegacy("probe request: %v", err)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// A server that answers a modern probe with an SSE stream is modern; do not
+	// ReadAll an unbounded stream. Otherwise read the (small) JSON body.
+	if isEventStream(resp.Header.Get("Content-Type")) {
+		c.era = mcp.EraModern
+		return
+	}
+	body, _ := io.ReadAll(resp.Body)
+	c.era = mcp.ClassifyHTTPProbe(body)
+}
+
+// fallbackLegacy sets the era to legacy and logs the reason, so a transient
+// detection failure against a modern server leaves a breadcrumb rather than a
+// silent misroute to the legacy path.
+func (c *HTTPClient) fallbackLegacy(format string, args ...interface{}) {
+	c.era = mcp.EraLegacy
+	log.Printf("mcp: http era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+}
+
+// isEventStream reports whether a Content-Type header denotes an SSE response.
+func isEventStream(contentType string) bool {
+	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(contentType)), "text/event-stream")
 }
 
 func (c *HTTPClient) sendRequestWithURL(ctx context.Context, req *mcp.JSONRPCRequest, urlStr string, triedFallback bool) (interface{}, error) {
@@ -296,6 +370,15 @@ func (c *HTTPClient) sendRequestWithURL(ctx context.Context, req *mcp.JSONRPCReq
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+
+	// Modern (2026-07-28) routing headers required on Streamable HTTP.
+	if c.era == mcp.EraModern {
+		httpReq.Header.Set(mcp.HeaderProtocolVersion, mcp.ProtocolVersion)
+		httpReq.Header.Set(mcp.HeaderMethod, req.Method)
+		if name := mcp.NameForRequest(req); name != "" {
+			httpReq.Header.Set(mcp.HeaderName, name)
+		}
+	}
 
 	for key, value := range c.headers {
 		httpReq.Header.Set(key, value)

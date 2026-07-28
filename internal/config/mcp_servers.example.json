@@ -22,7 +22,8 @@
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp", "--api-key", "${ENT_CONTEXT7_API_KEY}"],
       "persistent": false,
-      "timeout": 30
+      "timeout": 30,
+      "protocolVersion": "2025-11-25"
     },
     "sequential-thinking": {
       "enabled": false,
@@ -30,7 +31,8 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "persistent": false,
-      "timeout": 30
+      "timeout": 30,
+      "protocolVersion": "2025-11-25"
     },
     "deepwiki": {
       "enabled": true,
@@ -38,7 +40,8 @@
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.deepwiki.com/mcp"],
       "persistent": false,
-      "timeout": 30
+      "timeout": 30,
+      "protocolVersion": "2025-11-25"
     },
     "brave-search": {
       "enabled": false,

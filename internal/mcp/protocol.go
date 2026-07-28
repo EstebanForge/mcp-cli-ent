@@ -48,8 +48,9 @@ type RootsHandler interface {
 
 // ClientConfig holds configuration for MCP clients
 type ClientConfig struct {
-	Timeout int               `json:"timeout"`
-	Headers map[string]string `json:"headers,omitempty"`
+	Timeout         int               `json:"timeout"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	ProtocolVersion string            `json:"protocolVersion,omitempty"`
 }
 
 // DefaultClientConfig returns default client configuration

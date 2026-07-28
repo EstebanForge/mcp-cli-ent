@@ -13,12 +13,14 @@ import (
 
 // NewMCPClient creates an appropriate MCP client based on server configuration
 func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error) {
+	clientConfig := &mcp.ClientConfig{
+		Timeout:         serverConfig.Timeout,
+		Headers:         serverConfig.Headers,
+		ProtocolVersion: serverConfig.ResolvedProtocolVersion(),
+	}
+
 	if serverConfig.Type == "http" || serverConfig.URL != "" {
 		// HTTP client
-		clientConfig := &mcp.ClientConfig{
-			Timeout: serverConfig.Timeout,
-			Headers: serverConfig.Headers,
-		}
 		if serverConfig.Command != "" {
 			if missing := unresolvedEnvVars(serverConfig.Env); len(missing) > 0 {
 				return nil, &ClientError{fmt.Sprintf("missing required environment variables: %s", strings.Join(missing, ", "))}
@@ -35,7 +37,7 @@ func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error) {
 
 		// Stdio client - inject mcp-remote header if needed
 		args := injectMcpRemoteHeader(serverConfig.Command, serverConfig.Args)
-		return NewStdioClient(serverConfig.Command, args, serverConfig.Env)
+		return NewStdioClient(serverConfig.Command, args, serverConfig.Env, clientConfig)
 	}
 
 	return nil, &ClientError{"invalid server configuration: neither URL nor command specified"}

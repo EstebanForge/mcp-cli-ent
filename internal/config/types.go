@@ -11,19 +11,33 @@ type Configuration struct {
 	MCPServers map[string]ServerConfig `json:"mcpServers"`
 }
 
+// DefaultProtocolVersion is assumed when protocolVersion is omitted or empty.
+// "auto" means the client probes the server to detect its era (modern vs legacy).
+const DefaultProtocolVersion = "auto"
+
 // ServerConfig represents configuration for a single MCP server
 type ServerConfig struct {
-	Enabled     *bool             `json:"enabled,omitempty"`
-	Description string            `json:"description,omitempty"`
-	Type        string            `json:"type,omitempty"`
-	URL         string            `json:"url,omitempty"`
-	Command     string            `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Timeout     int               `json:"timeout,omitempty"`
-	Session     SessionConfig     `json:"session,omitempty"`
-	Persistent  bool              `json:"persistent,omitempty"`
+	Enabled         *bool             `json:"enabled,omitempty"`
+	Description     string            `json:"description,omitempty"`
+	Type            string            `json:"type,omitempty"`
+	URL             string            `json:"url,omitempty"`
+	Command         string            `json:"command,omitempty"`
+	Args            []string          `json:"args,omitempty"`
+	Env             map[string]string `json:"env,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Timeout         int               `json:"timeout,omitempty"`
+	Session         SessionConfig     `json:"session,omitempty"`
+	Persistent      bool              `json:"persistent,omitempty"`
+	ProtocolVersion string            `json:"protocolVersion,omitempty"`
+}
+
+// ResolvedProtocolVersion returns the effective protocolVersion, defaulting to
+// "auto" when unset. Unknown values pass through (warned at load time).
+func (c *ServerConfig) ResolvedProtocolVersion() string {
+	if c.ProtocolVersion == "" {
+		return DefaultProtocolVersion
+	}
+	return c.ProtocolVersion
 }
 
 // SessionConfig contains session-specific configuration for a server

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -15,20 +16,29 @@ import (
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
 )
 
+// stdioDetectionTimeout bounds the one-time era probe over stdio.
+const stdioDetectionTimeout = 10 * time.Second
+
 // StdioClient implements MCPClient for stdio-based MCP servers
 type StdioClient struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	stderr io.ReadCloser
-	reader *bufio.Reader
-	writer *bufio.Writer
-	closed bool
-	mutex  sync.Mutex
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	stdout        io.ReadCloser
+	stderr        io.ReadCloser
+	reader        *bufio.Reader
+	writer        *bufio.Writer
+	closed        bool
+	mutex         sync.Mutex
+	pending       map[string]chan []byte // request id -> waiter, keyed by idKey
+	readerDone    chan struct{}          // closed when readLoop exits
+	readerStarted bool                   // true once readLoop is launched
+	era           mcp.Era
+	capabilities  mcp.ClientCapabilities
+	detectOnce    sync.Once
 }
 
 // NewStdioClient creates a new stdio MCP client
-func NewStdioClient(command string, args []string, env map[string]string) (*StdioClient, error) {
+func NewStdioClient(command string, args []string, env map[string]string, config *mcp.ClientConfig) (*StdioClient, error) {
 	ctx := context.Background()
 
 	// Create the command
@@ -62,13 +72,22 @@ func NewStdioClient(command string, args []string, env map[string]string) (*Stdi
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
+	era := mcp.EraUnknown
+	if config != nil {
+		era = mcp.ClassifyEra(config.ProtocolVersion)
+	}
+
 	client := &StdioClient{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: stdout,
-		stderr: stderr,
-		reader: bufio.NewReader(stdout),
-		writer: bufio.NewWriter(stdin),
+		cmd:          cmd,
+		stdin:        stdin,
+		stdout:       stdout,
+		stderr:       stderr,
+		reader:       bufio.NewReader(stdout),
+		writer:       bufio.NewWriter(stdin),
+		pending:      make(map[string]chan []byte),
+		readerDone:   make(chan struct{}),
+		era:          era,
+		capabilities: mcp.ClientCapabilities{},
 	}
 
 	// Start the command
@@ -76,6 +95,11 @@ func NewStdioClient(command string, args []string, env map[string]string) (*Stdi
 		_ = client.Close()
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
+
+	// One goroutine owns the reader for the lifetime of the subprocess, so a
+	// context cancellation never leaves a competing reader behind.
+	client.readerStarted = true
+	go client.readLoop()
 
 	return client, nil
 }
@@ -311,17 +335,23 @@ func (c *StdioClient) NotifyRootsListChanged(roots []mcp.Root) error {
 // Close closes the stdio client and terminates the subprocess
 func (c *StdioClient) Close() error {
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	if c.closed {
+		c.mutex.Unlock()
 		return nil
 	}
-
 	c.closed = true
+	started := c.readerStarted
+	c.mutex.Unlock()
 
-	// Close pipes
+	// Close stdin first so the server sees EOF, then stop the process; only then
+	// close stdout, which unblocks the reader goroutine. Killing the process
+	// first avoids closing stdout under an active reader in the common case.
 	if c.stdin != nil {
 		_ = c.stdin.Close()
+	}
+	if c.cmd != nil && c.cmd.Process != nil {
+		_ = c.cmd.Process.Kill()
+		_ = c.cmd.Wait() // Wait for process to actually terminate
 	}
 	if c.stdout != nil {
 		_ = c.stdout.Close()
@@ -330,94 +360,178 @@ func (c *StdioClient) Close() error {
 		_ = c.stderr.Close()
 	}
 
-	// Terminate the process
-	if c.cmd != nil && c.cmd.Process != nil {
-		_ = c.cmd.Process.Kill()
-		_ = c.cmd.Wait() // Wait for process to actually terminate
+	// Wait for the reader goroutine to finish so none outlive Close.
+	if started {
+		<-c.readerDone
 	}
-
 	return nil
 }
 
 // sendRequest sends a JSON-RPC request to the stdio server
 func (c *StdioClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (interface{}, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.closed {
-		return nil, fmt.Errorf("client is closed")
+	// Detect era once for auto-pinned servers, then shape the request.
+	c.detectOnce.Do(func() {
+		if c.era == mcp.EraUnknown {
+			c.detectEra(ctx)
+		}
+	})
+	if c.era == mcp.EraModern {
+		if err := mcp.InjectMeta(req, c.capabilities); err != nil {
+			return nil, err
+		}
 	}
 
-	// Create a context with timeout for the operation
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	// Marshal the request
+	line, err := c.roundTrip(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcResp, err := mcp.UnmarshalResponse(line)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if rpcResp.Error != nil {
+		return nil, fmt.Errorf("JSON-RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
+	}
+	return rpcResp.Result, nil
+}
+
+// detectEra probes the server once with a modern server/discover request and
+// caches the verdict. Best-effort: any failure defaults to legacy and is logged.
+func (c *StdioClient) detectEra(ctx context.Context) {
+	probe := mcp.NewRequest("era-probe", "server/discover", nil)
+	if err := mcp.InjectMeta(probe, c.capabilities); err != nil {
+		c.fallbackLegacy("inject _meta: %v", err)
+		return
+	}
+	pctx, cancel := context.WithTimeout(ctx, stdioDetectionTimeout)
+	defer cancel()
+	line, err := c.roundTrip(pctx, probe)
+	if err != nil {
+		c.fallbackLegacy("probe: %v", err)
+		return
+	}
+	rpcResp, err := mcp.UnmarshalResponse(line)
+	if err != nil {
+		c.fallbackLegacy("parse probe response: %v", err)
+		return
+	}
+	c.era = mcp.ClassifyProbeResponse(rpcResp)
+}
+
+// fallbackLegacy sets the era to legacy and logs the reason, so a transient
+// detection failure against a modern server leaves a breadcrumb rather than a
+// silent misroute to the legacy path.
+func (c *StdioClient) fallbackLegacy(format string, args ...interface{}) {
+	c.era = mcp.EraLegacy
+	log.Printf("mcp: stdio era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+}
+
+// roundTrip writes req, waits for its matching response line, and returns it.
+// Writes are serialized via c.mutex; the read is handled by readLoop, so a
+// context cancellation unregisters the waiter instead of leaking a goroutine
+// that competes for the shared reader.
+func (c *StdioClient) roundTrip(ctx context.Context, req *mcp.JSONRPCRequest) ([]byte, error) {
 	reqBytes, err := mcp.MarshalRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-
-	// Add newline for JSON-RPC over stdio
 	reqBytes = append(reqBytes, '\n')
 
-	// Send request
+	key := idKey(req.ID)
+	ch := make(chan []byte, 1)
+
+	c.mutex.Lock()
+	if c.closed {
+		c.mutex.Unlock()
+		return nil, fmt.Errorf("client is closed")
+	}
+	c.pending[key] = ch
 	if _, err := c.writer.Write(reqBytes); err != nil {
+		delete(c.pending, key)
+		c.mutex.Unlock()
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
-
 	if err := c.writer.Flush(); err != nil {
+		delete(c.pending, key)
+		c.mutex.Unlock()
 		return nil, fmt.Errorf("failed to flush request: %w", err)
 	}
+	c.mutex.Unlock()
 
-	readLine := func(ctx context.Context) ([]byte, error) {
-		responseChan := make(chan []byte, 1)
-		errorChan := make(chan error, 1)
-
-		go func() {
-			line, err := c.reader.ReadBytes('\n')
-			if err != nil {
-				errorChan <- fmt.Errorf("failed to read response: %w", err)
-				return
-			}
-			responseChan <- line
-		}()
-
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("request timeout: %w", ctx.Err())
-		case err := <-errorChan:
-			return nil, err
-		case line := <-responseChan:
-			return line, nil
+	select {
+	case <-ctx.Done():
+		c.mutex.Lock()
+		delete(c.pending, key)
+		c.mutex.Unlock()
+		return nil, fmt.Errorf("request timeout: %w", ctx.Err())
+	case line, ok := <-ch:
+		if !ok {
+			return nil, fmt.Errorf("connection closed")
 		}
+		return line, nil
 	}
+}
 
+// readLoop owns c.reader exclusively for the lifetime of the subprocess. It
+// reads newline-delimited JSON-RPC messages and dispatches responses to the
+// waiting caller by request id. Notifications and unparseable lines are
+// skipped. On a read error (including process exit) it fails all pending
+// waiters and exits.
+func (c *StdioClient) readLoop() {
+	defer close(c.readerDone)
 	for {
-		line, err := readLine(ctx)
+		line, err := c.reader.ReadBytes('\n')
 		if err != nil {
-			return nil, err
+			c.failPending()
+			return
 		}
-
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
-
-		rpcResp, err := mcp.UnmarshalResponse(line)
-		if err != nil {
+		rpcResp, perr := mcp.UnmarshalResponse(line)
+		if perr != nil {
 			continue
 		}
-
-		// Skip notifications (no id field) -- they are not responses to our request
 		if rpcResp.ID == nil {
-			continue
+			continue // server-to-client notification; not a response
 		}
-
-		if rpcResp.Error != nil {
-			return nil, fmt.Errorf("JSON-RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
+		key := idKey(rpcResp.ID)
+		c.mutex.Lock()
+		ch, ok := c.pending[key]
+		if ok {
+			delete(c.pending, key)
 		}
-
-		return rpcResp.Result, nil
+		c.mutex.Unlock()
+		if ok {
+			select {
+			case ch <- line:
+			default: // waiter already gone (timed out); drop
+			}
+		}
 	}
+}
+
+// failPending wakes every waiting caller after the reader exits.
+func (c *StdioClient) failPending() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for key, ch := range c.pending {
+		close(ch)
+		delete(c.pending, key)
+	}
+}
+
+// idKey returns a canonical key for a JSON-RPC request id, so an int request id
+// (e.g. 1) matches its float64 echo (1.0) in the response.
+func idKey(id interface{}) string {
+	b, err := json.Marshal(id)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
