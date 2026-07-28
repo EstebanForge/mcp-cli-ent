@@ -141,6 +141,20 @@ func SaveToolsToCache(cache *ToolsCache) error {
 	return os.WriteFile(cachePath, data, 0644)
 }
 
+// toolsIndex is the JSON output envelope for the tools index. meta carries
+// per-server fetch errors so agents reading only stdout see why a server is
+// missing; servers is the server->tools map.
+type toolsIndex struct {
+	Meta    *toolsIndexMeta        `json:"meta,omitempty"`
+	Servers map[string][]indexTool `json:"servers"`
+}
+
+// toolsIndexMeta holds envelope metadata. errors maps a server name to the
+// reason its tools could not be fetched (skip or failure).
+type toolsIndexMeta struct {
+	Errors map[string]string `json:"errors,omitempty"`
+}
+
 // showRootHelpWithServers displays available tools from all MCP servers with usage examples
 func showRootHelpWithServers(cmd *cobra.Command) error {
 	// Load configuration
@@ -177,6 +191,7 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 	}
 
 	toolsByServer := make(map[string][]mcp.Tool)
+	errorsByServer := make(map[string]string) // per-server fetch errors, surfaced in JSON meta
 	var toDiscover []string
 	now := time.Now()
 
@@ -193,8 +208,10 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				// Still valid. Negative entries yield no tools but are
 				// surfaced so a failing server does not vanish silently.
 				if entry.Failed {
-					fmt.Fprintf(os.Stderr, "%s: (skipped: recently failed; retry in %s or use --refresh)\n",
-						serverName, (ttl - now.Sub(entry.LastUpdate)).Round(time.Second))
+					retry := (ttl - now.Sub(entry.LastUpdate)).Round(time.Second)
+					msg := fmt.Sprintf("skipped: recently failed; retry in %s or use --refresh", retry)
+					fmt.Fprintf(os.Stderr, "%s: (%s)\n", serverName, msg)
+					errorsByServer[serverName] = msg
 				} else {
 					toolsByServer[serverName] = entry.Tools
 				}
@@ -232,8 +249,10 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 
 				mcpClient, err := factory.CreateClient(name, serverConfig)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s: (failed to connect: %v)\n", name, err)
+					msg := fmt.Sprintf("failed to connect: %v", err)
+					fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
 					mu.Lock()
+					errorsByServer[name] = msg
 					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
 					mu.Unlock()
 					return
@@ -242,8 +261,10 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				tools, err := mcpClient.ListTools(ctx)
 				_ = mcpClient.Close()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s: (failed to list tools: %v)\n", name, err)
+					msg := fmt.Sprintf("failed to list tools: %v", err)
+					fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
 					mu.Lock()
+					errorsByServer[name] = msg
 					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
 					mu.Unlock()
 					return
@@ -298,13 +319,17 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 			} else {
 				fmt.Println("No tools found on any server")
 			}
-		} else {
+			return nil
+		}
+		// JSON mode: emit the bare error envelope only when there are no fetch
+		// errors to report. With per-server errors, fall through to render the
+		// meta envelope (servers may be empty) so consumers see why each failed.
+		if len(errorsByServer) == 0 {
 			if searchQuery != "" {
 				return encodeErrorJSON("no_match", "No tools matching '%s' found", searchQuery)
 			}
 			return encodeErrorJSON("no_tools", "No tools found on any server")
 		}
-		return nil
 	}
 
 	// Output: JSON by default, --human for terminal
@@ -346,10 +371,10 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// JSON output (default): compact index — name + description only
-	// Full details via: mcp-cli-ent list-tools <server>
+	// JSON output (default): compact index under a meta envelope. Per-server
+	// fetch errors are carried in meta.errors so agents reading only stdout see
+	// why a server is missing, not just its absence.
 	result := make(map[string][]indexTool)
-
 	for _, serverName := range sortedServers {
 		tools, ok := toolsByServer[serverName]
 		if !ok || len(tools) == 0 {
@@ -363,9 +388,14 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 		}
 	}
 
+	index := toolsIndex{Servers: result}
+	if len(errorsByServer) > 0 {
+		index.Meta = &toolsIndexMeta{Errors: errorsByServer}
+	}
+
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	return enc.Encode(result)
+	return enc.Encode(index)
 }
 
 // BuildExampleArgs creates example JSON arguments based on tool schema.
