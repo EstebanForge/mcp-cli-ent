@@ -11,6 +11,10 @@ import (
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
 )
 
+// Verbose gates diagnostic logging (e.g. era-detection fallback) so the default
+// machine/JSON output stays clean; the CLI enables it under --verbose.
+var Verbose bool
+
 // NewMCPClient creates an appropriate MCP client based on server configuration
 func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error) {
 	clientConfig := &mcp.ClientConfig{

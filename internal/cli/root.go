@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/mcp-cli-ent/mcp-cli/internal/client"
 	"github.com/mcp-cli-ent/mcp-cli/internal/config"
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
 	"github.com/mcp-cli-ent/mcp-cli/pkg/version"
@@ -210,7 +211,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				if entry.Failed {
 					retry := (ttl - now.Sub(entry.LastUpdate)).Round(time.Second)
 					msg := fmt.Sprintf("skipped: recently failed; retry in %s or use --refresh", retry)
-					fmt.Fprintf(os.Stderr, "%s: (%s)\n", serverName, msg)
+					if humanOutput || verbose {
+						fmt.Fprintf(os.Stderr, "%s: (%s)\n", serverName, msg)
+					}
 					errorsByServer[serverName] = msg
 				} else {
 					toolsByServer[serverName] = entry.Tools
@@ -250,7 +253,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				mcpClient, err := factory.CreateClient(name, serverConfig)
 				if err != nil {
 					msg := fmt.Sprintf("failed to connect: %v", err)
-					fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
+					if humanOutput || verbose {
+						fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
+					}
 					mu.Lock()
 					errorsByServer[name] = msg
 					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
@@ -262,7 +267,9 @@ func showRootHelpWithServers(cmd *cobra.Command) error {
 				_ = mcpClient.Close()
 				if err != nil {
 					msg := fmt.Sprintf("failed to list tools: %v", err)
-					fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
+					if humanOutput || verbose {
+						fmt.Fprintf(os.Stderr, "%s: (%s)\n", name, msg)
+					}
 					mu.Lock()
 					errorsByServer[name] = msg
 					cache.Servers[name] = ToolsCacheEntry{Failed: true, LastUpdate: time.Now()}
@@ -597,6 +604,9 @@ func showAvailableServers(cmd *cobra.Command) error {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+	// Propagate the --verbose flag to the client package so diagnostic logs
+	// (e.g. era-detection fallback) stay silent in the default machine/JSON path.
+	cobra.OnInitialize(func() { client.Verbose = verbose })
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "configuration file path (default is mcp_servers.json)")

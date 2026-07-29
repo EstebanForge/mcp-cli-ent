@@ -427,7 +427,9 @@ func (c *StdioClient) detectEra(ctx context.Context) {
 // silent misroute to the legacy path.
 func (c *StdioClient) fallbackLegacy(format string, args ...interface{}) {
 	c.era = mcp.EraLegacy
-	log.Printf("mcp: stdio era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+	if Verbose {
+		log.Printf("mcp: stdio era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+	}
 }
 
 // roundTrip writes req, waits for its matching response line, and returns it.

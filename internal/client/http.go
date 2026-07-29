@@ -346,7 +346,9 @@ func (c *HTTPClient) detectEra(ctx context.Context) {
 // silent misroute to the legacy path.
 func (c *HTTPClient) fallbackLegacy(format string, args ...interface{}) {
 	c.era = mcp.EraLegacy
-	log.Printf("mcp: http era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+	if Verbose {
+		log.Printf("mcp: http era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
+	}
 }
 
 // isEventStream reports whether a Content-Type header denotes an SSE response.
