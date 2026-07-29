@@ -33,17 +33,36 @@ mcp-cli-ent list-tools context7 --human --verbose
 
 ### Bare invocation: Compact Discovery Index
 
-Running `mcp-cli-ent` with no args returns a compact index — one `name` + `description` per tool, grouped by server. No params, no call examples, no schema. Use `list-tools <server>` when ready to call.
+Running `mcp-cli-ent` with no args returns a compact index wrapped in a `meta` envelope: `servers` holds the tools (one `name` + `description` per tool, grouped by server), and `meta.errors` lists any server that failed to fetch (skipped, connect failure, or list failure). `meta` is omitted entirely when every server succeeds. No params, no call examples, no schema here. Use `list-tools <server>` when ready to call.
 
 ```json
 {
-  "context7": [
-    { "name": "resolve-library-id", "description": "Resolves a package name to a Context7 library ID" },
-    { "name": "query-docs", "description": "Retrieves up-to-date documentation and code examples" }
-  ],
-  "deepwiki": [
-    { "name": "read_wiki_structure", "description": "Get documentation topics for a GitHub repository" }
-  ]
+  "servers": {
+    "context7": [
+      { "name": "resolve-library-id", "description": "Resolves a package name to a Context7 library ID" },
+      { "name": "query-docs", "description": "Retrieves up-to-date documentation and code examples" }
+    ],
+    "deepwiki": [
+      { "name": "read_wiki_structure", "description": "Get documentation topics for a GitHub repository" }
+    ]
+  }
+}
+```
+
+With a failing server the reason appears in `meta.errors` on stdout only (default mode prints nothing to stderr):
+
+```json
+{
+  "meta": {
+    "errors": {
+      "deepwiki": "skipped: recently failed; retry in 4m49s or use --refresh"
+    }
+  },
+  "servers": {
+    "context7": [
+      { "name": "resolve-library-id", "description": "Resolves a package name to a Context7 library ID" }
+    ]
+  }
 }
 ```
 
@@ -70,12 +89,14 @@ Terse by default (1 line per tool). `--human --verbose` expands to 4-line format
 
 ### Error responses
 
-Empty results or no matches return structured JSON errors:
+A completely empty result (no tools anywhere, or no search match) returns a top-level structured error:
 
 ```json
 { "error": true, "error_code": "no_match", "error_description": "No tools matching 'wiki' found" }
 { "error": true, "error_code": "no_tools", "error_description": "No tools found on any server" }
 ```
+
+Per-server fetch failures (a server skipped, refused to connect, or timed out) do not use this shape. They are reported inline in `meta.errors` of the normal envelope (see above), with the other servers still returned in `servers`.
 
 ## Flags
 
@@ -88,6 +109,10 @@ Empty results or no matches return structured JSON errors:
 | `--clear-cache` | Clear tools cache. |
 | `--config <path>` | Custom config file path. |
 | `--timeout <sec>` | Request timeout (default 30). |
+
+## Protocol Era (Dual-Era 2026-07-28)
+
+Each server speaks one of two MCP eras, auto-detected per server on first contact: **modern** (2026-07-28 stateless protocol, per-request `_meta`) or **legacy** (`initialize` handshake). This is transparent to tool calls. Override it per server in `mcp_servers.json` with `protocolVersion`: `"auto"` (default), `"2026-07-28"`, or a legacy date like `"2025-11-25"`. See the project README for the full field reference.
 
 ## Workflows
 

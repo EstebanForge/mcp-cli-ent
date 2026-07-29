@@ -178,6 +178,8 @@ type MCPClient interface {
 }
 ```
 
+**Dual-Era Detection (2026-07-28)**: Each transport auto-detects the server's protocol era on first request (`internal/mcp/era.go`, controlled by the `protocolVersion` config field). Modern servers receive per-request `_meta` and the `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers; legacy servers use the `initialize` handshake. The stdio transport owns a single reader goroutine with an id-keyed pending map so request timeouts unregister the waiter instead of leaking a competing reader. Pin a version to skip detection.
+
 ### Daemon Architecture
 
 **Location**: `internal/daemon/`
