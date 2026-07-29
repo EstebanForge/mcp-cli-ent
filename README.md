@@ -14,6 +14,7 @@ Use MCP servers without loading them into your agent's context window.
 - **Zero Dependencies**: Single binary, no runtime requirements
 - **Universal Config**: Compatible with existing MCP configurations
 - **Dual Transport**: HTTP and stdio-based servers
+- **Dual-Era Protocol**: Speaks both modern (2026-07-28, stateless) and legacy MCP servers, auto-detecting each
 - **Multi-Server**: Manage multiple MCP servers easily
 - **Secure**: Environment variable substitution for credentials
 - **Smart Output**: Intelligent handling of binary data and images
@@ -119,6 +120,7 @@ mcp-cli-ent create-config
       },
       "timeout": 30,
       "persistent": false,
+      "protocolVersion": "auto",
       "session": {
         "type": "persistent",
         "autoStart": true,
@@ -145,6 +147,7 @@ mcp-cli-ent create-config
 | `headers` | object | `{}` | HTTP headers (HTTP servers only) |
 | `timeout` | int | `30` | Request timeout in seconds |
 | `persistent` | bool | `false` | Enable daemon-managed persistent sessions |
+| `protocolVersion` | string | `"auto"` | MCP protocol version: `"auto"` (detect), `"2026-07-28"` (modern), or a legacy date like `"2025-11-25"` |
 
 ### Session Configuration (Optional)
 

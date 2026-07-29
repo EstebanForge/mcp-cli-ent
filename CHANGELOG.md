@@ -2,6 +2,26 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.4.0 -->
+## [1.4.0] - 2026-07-28
+
+### Added
+
+- **Dual-era MCP 2026-07-28 support.** A new `protocolVersion` config field (default `"auto"`) probes `server/discover` once per server, classifies it as modern (stateless, per-request `_meta`) or legacy (`initialize` handshake), caches the verdict, and shapes each request accordingly. The modern path injects `_meta` and the `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers; the legacy path is unchanged. Pin a version (e.g. `"2025-11-25"`) to skip detection.
+- **`meta` envelope for the tools index.** `list-tools` and bare `mcp-cli-ent` now emit `{"meta":{"errors":{...}}, "servers":{...}}`. Per-server fetch errors (negative-cache skip, connect failure, list failure) land in `meta.errors` so agents reading only stdout see why a server is missing instead of its silent absence. `meta` is omitted entirely when nothing failed.
+
+### Changed
+
+- **Machine output is pure JSON.** In default JSON mode, per-server fetch errors and era-detection diagnostics no longer print to stderr; they appear only in `meta.errors`. The human-readable lines remain available under `--human` and `--verbose`.
+- **Config fails closed** when a legacy `protocolVersion` pin is paired with `session.type: "stateless"`, since legacy needs a held `initialize` connection. Unknown `protocolVersion` values warn and fall back to auto.
+
+### Fixed
+
+- **Stdio transport data race on timeout.** The stdio client now runs a single reader-owner goroutine with an id-keyed pending map; a context cancellation unregisters the waiter instead of leaking a goroutine that competed for the shared reader. Clean under `go test -race`.
+- **`_meta` injection preserves large integers.** `InjectMeta` uses `json.UseNumber` so tool arguments keep exact number representation through the modern path.
+
+<!-- RELEASE:END 1.4.0 -->
+
 <!-- RELEASE:START 1.3.0 -->
 ## [1.3.0] - 2026-07-08
 

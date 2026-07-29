@@ -280,7 +280,8 @@ func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error)
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "persistent": false,
-      "timeout": 30
+      "timeout": 30,
+      "protocolVersion": "2025-11-25"
     }
   }
 }
@@ -302,6 +303,7 @@ func NewMCPClient(serverConfig config.ServerConfig) (mcp.MCPClient, error)
 - **Persistent Flag Support**: Simple boolean to enable daemon-managed sessions
 - **Chrome Isolation**: Automatic `--isolated` flag for browser profile conflict prevention
 - **Smart Defaults**: Browser automation servers configured for persistence by default
+- **Dual-Era Protocol (2026-07-28)**: The `protocolVersion` field (default `"auto"`) probes `server/discover` to detect whether a server speaks the modern stateless protocol or the legacy `initialize` handshake, then shapes each request accordingly. Pin a version (e.g. `"2025-11-25"`) to skip detection; legacy pins paired with `session.type: "stateless"` are rejected at load.
 
 ## CLI Interface
 
