@@ -25,8 +25,11 @@ type DaemonClient struct {
 // NewDaemonClient creates a new daemon client
 func NewDaemonClient() *DaemonClient {
 	return &DaemonClient{
-		manager:    NewDaemonManager(),
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		manager: NewDaemonManager(),
+		// The daemon runs each operation with the server's configured
+		// timeout plus a legacy handshake window; the transport budget must
+		// exceed the daemon-side worst case instead of cutting it off.
+		httpClient: &http.Client{Timeout: 90 * time.Second},
 		autoStart:  true,
 	}
 }

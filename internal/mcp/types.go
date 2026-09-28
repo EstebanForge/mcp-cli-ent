@@ -467,6 +467,22 @@ func MarshalRequest(req *JSONRPCRequest) ([]byte, error) {
 	return json.Marshal(req)
 }
 
+// MarshalNotification marshals a JSON-RPC 2.0 notification. The id member is
+// omitted entirely: a notification is defined as a request object without an
+// id member, and "id":null is neither a valid request nor a notification,
+// so strict servers drop it.
+func MarshalNotification(method string, params interface{}) ([]byte, error) {
+	return json.Marshal(struct {
+		JSONRPC string      `json:"jsonrpc"`
+		Method  string      `json:"method"`
+		Params  interface{} `json:"params,omitempty"`
+	}{
+		JSONRPC: "2.0",
+		Method:  method,
+		Params:  params,
+	})
+}
+
 // UnmarshalResponse unmarshals JSON-RPC response from bytes
 func UnmarshalResponse(data []byte) (*JSONRPCResponse, error) {
 	var resp JSONRPCResponse

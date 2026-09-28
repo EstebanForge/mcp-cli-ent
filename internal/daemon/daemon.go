@@ -161,18 +161,18 @@ func (d *Daemon) startSessionBackground(session *PersistentSession) {
 	// Create MCP client
 	client, err := d.clientFactory(session.Config)
 	if err != nil {
-		d.setSessionError(session.ServerName, fmt.Sprintf("failed to create client: %v", err))
+		d.evictSession(session.ServerName, fmt.Sprintf("failed to create client: %v", err))
 		return
 	}
 
 	// Test connection with a simple health check
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionTimeout(session.Config, 30*time.Second))
 	defer cancel()
 
 	_, err = client.ListTools(ctx)
 	if err != nil {
 		_ = client.Close()
-		d.setSessionError(session.ServerName, fmt.Sprintf("health check failed: %v", err))
+		d.evictSession(session.ServerName, fmt.Sprintf("health check failed: %v", err))
 		return
 	}
 
@@ -271,7 +271,7 @@ func (d *Daemon) CallTool(serverName, toolName string, args map[string]interface
 	session.LastUsed = time.Now()
 
 	// Execute tool
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionTimeout(session.Config, 60*time.Second))
 	defer cancel()
 
 	result, err := session.Client.CallTool(ctx, toolName, args)
@@ -298,7 +298,7 @@ func (d *Daemon) ListTools(serverName string) ([]mcp.Tool, error) {
 	d.sessionMutex.RUnlock()
 
 	// Fetch tools
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionTimeout(session.Config, 30*time.Second))
 	defer cancel()
 
 	tools, err := session.Client.ListTools(ctx)
@@ -346,16 +346,23 @@ func (d *Daemon) GetStatus() *DaemonStatus {
 	}
 }
 
-// Helper methods
-
-func (d *Daemon) setSessionError(serverName, errorMsg string) {
+// evictSession removes a session that never became usable. A zombie entry
+// (nil client, error status) blocks a clean recreation and stays in the map
+// until the daemon restarts; deleting it lets the next call start fresh.
+func (d *Daemon) evictSession(serverName, reason string) {
+	log.Printf("Evicting session %s: %s", serverName, reason)
 	d.sessionMutex.Lock()
 	defer d.sessionMutex.Unlock()
+	delete(d.sessions, serverName)
+}
 
-	if session, exists := d.sessions[serverName]; exists {
-		session.Status = SessionStatusError
-		session.Error = errorMsg
+// sessionTimeout returns the per-request window for a session: the server's
+// configured timeout in seconds, or the fallback when unset.
+func sessionTimeout(cfg config.ServerConfig, fallback time.Duration) time.Duration {
+	if cfg.Timeout > 0 {
+		return time.Duration(cfg.Timeout) * time.Second
 	}
+	return fallback
 }
 
 func (d *Daemon) cleanupRoutine() {

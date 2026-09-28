@@ -369,6 +369,18 @@ func runListTools(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
+	// Bound the whole operation: server-specific timeout wins over the
+	// global --timeout flag (same precedence as the root command path).
+	if len(args) > 0 {
+		serverTimeout := timeout
+		if serverConfig, exists := cfg.GetServer(args[0]); exists && serverConfig.Timeout > 0 {
+			serverTimeout = serverConfig.Timeout
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(serverTimeout)*time.Second)
+		defer cancel()
+	}
+
 	if len(args) == 0 {
 		// Show all tools from all servers with usage examples (same behavior as root command)
 		return showRootHelpWithServers(cmd)

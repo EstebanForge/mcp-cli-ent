@@ -19,6 +19,18 @@ import (
 // stdioDetectionTimeout bounds the one-time era probe over stdio.
 const stdioDetectionTimeout = 10 * time.Second
 
+// stdioHandshakeTimeout bounds the one-time legacy initialize handshake.
+const stdioHandshakeTimeout = 15 * time.Second
+
+// defaultRequestTimeout is the per-request window when config.Timeout is
+// unset.
+const defaultRequestTimeout = 30 * time.Second
+
+// legacyProtocolVersion is the latest widely-deployed MCP spec version, used
+// in the legacy initialize handshake. Modern-era negotiation happens without
+// a handshake via per-request _meta.
+const legacyProtocolVersion = "2025-06-18"
+
 // StdioClient implements MCPClient for stdio-based MCP servers
 type StdioClient struct {
 	cmd           *exec.Cmd
@@ -35,6 +47,8 @@ type StdioClient struct {
 	era           mcp.Era
 	capabilities  mcp.ClientCapabilities
 	detectOnce    sync.Once
+	handshakeOnce sync.Once
+	timeout       time.Duration // per-request window from config.Timeout
 }
 
 // NewStdioClient creates a new stdio MCP client
@@ -73,8 +87,12 @@ func NewStdioClient(command string, args []string, env map[string]string, config
 	}
 
 	era := mcp.EraUnknown
+	timeout := defaultRequestTimeout
 	if config != nil {
 		era = mcp.ClassifyEra(config.ProtocolVersion)
+		if config.Timeout > 0 {
+			timeout = time.Duration(config.Timeout) * time.Second
+		}
 	}
 
 	client := &StdioClient{
@@ -88,6 +106,7 @@ func NewStdioClient(command string, args []string, env map[string]string, config
 		readerDone:   make(chan struct{}),
 		era:          era,
 		capabilities: mcp.ClientCapabilities{},
+		timeout:      timeout,
 	}
 
 	// Start the command
@@ -312,10 +331,10 @@ func (c *StdioClient) NotifyRootsListChanged(roots []mcp.Root) error {
 	params := map[string]interface{}{
 		"roots": roots,
 	}
-	req := mcp.NewRequest(nil, "roots/list_changed", params)
 
-	// For notifications, we send without expecting a response
-	reqBytes, err := mcp.MarshalRequest(req)
+	// Notifications omit the id member entirely; "id":null is neither a
+	// valid request nor a notification and strict servers drop it.
+	reqBytes, err := mcp.MarshalNotification("roots/list_changed", params)
 	if err != nil {
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
@@ -375,13 +394,21 @@ func (c *StdioClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) 
 			c.detectEra(ctx)
 		}
 	})
+	// Legacy servers require the initialize handshake before any protocol
+	// request; strict ones (e.g. the Automattic WordPress bridge) queue
+	// requests until it completes, so skip it only for modern servers.
+	if c.era == mcp.EraLegacy {
+		c.handshakeOnce.Do(func() {
+			c.legacyHandshake(ctx)
+		})
+	}
 	if c.era == mcp.EraModern {
 		if err := mcp.InjectMeta(req, c.capabilities); err != nil {
 			return nil, err
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
 	line, err := c.roundTrip(ctx, req)
@@ -430,6 +457,71 @@ func (c *StdioClient) fallbackLegacy(format string, args ...interface{}) {
 	if Verbose {
 		log.Printf("mcp: stdio era detection failed (%s); assuming legacy", fmt.Sprintf(format, args...))
 	}
+}
+
+// legacyHandshake performs the spec-required initialize +
+// notifications/initialized exchange once per client. Strict legacy servers
+// (e.g. the Automattic WordPress bridge) queue every request until the
+// handshake completes, so skipping it hangs all traffic until the deadline.
+func (c *StdioClient) legacyHandshake(ctx context.Context) {
+	hctx, cancel := context.WithTimeout(ctx, stdioHandshakeTimeout)
+	defer cancel()
+
+	params := &mcp.InitializeParams{
+		ProtocolVersion: legacyProtocolVersion,
+		Capabilities:    c.capabilities,
+		ClientInfo:      mcp.ClientInfo{Name: mcp.ClientName, Version: mcp.ClientVersion},
+	}
+	req := mcp.NewRequest(0, "initialize", params)
+	line, err := c.roundTrip(hctx, req)
+	if err != nil {
+		c.handshakeFailed("initialize: %v", err)
+		return
+	}
+	rpcResp, err := mcp.UnmarshalResponse(line)
+	if err != nil {
+		c.handshakeFailed("parse initialize response: %v", err)
+		return
+	}
+	if rpcResp.Error != nil {
+		c.handshakeFailed("initialize rejected: %d %s", rpcResp.Error.Code, rpcResp.Error.Message)
+		return
+	}
+	if err := c.notify("notifications/initialized"); err != nil {
+		c.handshakeFailed("send notifications/initialized: %v", err)
+	}
+}
+
+// handshakeFailed records a failed handshake without aborting the request:
+// lenient servers answer protocol requests without a handshake, so failing
+// hard here would break them over a step they never needed.
+func (c *StdioClient) handshakeFailed(format string, args ...interface{}) {
+	if Verbose {
+		log.Printf("mcp: stdio legacy handshake failed (%s); continuing without it", fmt.Sprintf(format, args...))
+	}
+}
+
+// notify writes a JSON-RPC notification: no id member and no response is
+// expected, so nothing is registered in the pending map.
+func (c *StdioClient) notify(method string) error {
+	b, err := mcp.MarshalNotification(method, nil)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification: %w", err)
+	}
+	b = append(b, '\n')
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.closed {
+		return fmt.Errorf("client is closed")
+	}
+	if _, err := c.writer.Write(b); err != nil {
+		return fmt.Errorf("failed to write notification: %w", err)
+	}
+	if err := c.writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush notification: %w", err)
+	}
+	return nil
 }
 
 // roundTrip writes req, waits for its matching response line, and returns it.

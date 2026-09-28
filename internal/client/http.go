@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -296,7 +298,22 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) (
 			return nil, err
 		}
 	}
-	return c.sendRequestWithURL(ctx, req, c.baseURL, false)
+	result, err := c.sendRequestWithURL(ctx, req, c.baseURL, false)
+	// One bounded retry on 429: rate-limit blips (e.g. a WAF on the upstream
+	// API) recover within the server's own Retry-After window; hammering the
+	// limiter with more retries only extends the cooldown.
+	if err != nil {
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusTooManyRequests {
+			if wait, ok := retryAfterDelay(statusErr.Header.Get("Retry-After")); ok {
+				if sleepErr := sleepCtx(ctx, wait); sleepErr != nil {
+					return nil, fmt.Errorf("HTTP request failed: %w", sleepErr)
+				}
+				return c.sendRequestWithURL(ctx, req, c.baseURL, false)
+			}
+		}
+	}
+	return result, err
 }
 
 // detectEra probes the server once with a modern server/discover request and
@@ -356,6 +373,62 @@ func isEventStream(contentType string) bool {
 	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(contentType)), "text/event-stream")
 }
 
+// max429RetryAfter caps the Retry-After wait so a hostile header cannot
+// stall a request. Rate-limit cooldowns longer than this surface as errors.
+const max429RetryAfter = 10 * time.Second
+
+// httpStatusError reports a non-2xx HTTP response with the details needed for
+// bounded retries (status code, headers).
+type httpStatusError struct {
+	StatusCode int
+	Header     http.Header
+	Body       string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("HTTP error: %d %s - %s", e.StatusCode, http.StatusText(e.StatusCode), e.Body)
+}
+
+// retryAfterDelay parses a Retry-After header (delay-seconds or HTTP-date),
+// capped at max429RetryAfter. Negative or unparseable values report false.
+func retryAfterDelay(h string) (time.Duration, bool) {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(h); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		d := time.Duration(secs) * time.Second
+		if d > max429RetryAfter {
+			d = max429RetryAfter
+		}
+		return d, true
+	}
+	if t, err := time.Parse(http.TimeFormat, h); err == nil {
+		d := time.Until(t)
+		if d <= 0 {
+			return 0, true
+		}
+		if d > max429RetryAfter {
+			d = max429RetryAfter
+		}
+		return d, true
+	}
+	return 0, false
+}
+
+// sleepCtx waits for d or until the context is done.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
+
 func (c *HTTPClient) sendRequestWithURL(ctx context.Context, req *mcp.JSONRPCRequest, urlStr string, triedFallback bool) (interface{}, error) {
 	// Marshal the request
 	reqBytes, err := mcp.MarshalRequest(req)
@@ -406,7 +479,11 @@ func (c *HTTPClient) sendRequestWithURL(ctx context.Context, req *mcp.JSONRPCReq
 				return c.sendRequestWithURL(ctx, req, fallbackURL, true)
 			}
 		}
-		return nil, fmt.Errorf("HTTP error: %d %s - %s", resp.StatusCode, resp.Status, string(body))
+		return nil, &httpStatusError{
+			StatusCode: resp.StatusCode,
+			Header:     resp.Header,
+			Body:       string(body),
+		}
 	}
 
 	// Unmarshal JSON-RPC response
