@@ -2,6 +2,26 @@
 
 All notable changes to MCP CLI-Ent will be documented in this file.
 
+<!-- RELEASE:START 1.5.0 -->
+## [1.5.0] - 2026-09-28
+
+### Fixed
+
+- **Legacy stdio servers no longer time out on `list-tools`.** The client never sent the MCP initialize handshake, and strict legacy servers (the Automattic WordPress bridge among them) queue requests until it completes, so `tools/list` hung until the deadline with `request timeout: context deadline exceeded`. Lenient servers answered bare requests, which hid the bug. A legacy-era client now runs `initialize` + `notifications/initialized` once before its first protocol request; a failed attempt retries on the next call, and failure stays non-fatal so lenient servers keep working (breadcrumbs under `--verbose`).
+- **Notifications carry no `id` member.** The JSON-RPC id was marshaled as `"id":null`, which is neither a request nor a notification; strict servers dropped it. `notifications/initialized` and `roots/list_changed` on both transports now omit the member.
+- **Per-server `timeout` config is honored.** The stdio transport ignored `timeout` and used a hardcoded 30-second window; the daemon used its own fixed budgets. The configured timeout now governs stdio requests, daemon list/call/health-check operations, and the daemon's transport budget (raised 30s to 90s so it covers the daemon-side operation). `list-tools` prefers the server timeout over the global `--timeout` flag, matching the bare-invocation path.
+- **Concurrent requests no longer lose responses.** Request ids were hardcoded literals shared across methods, so two same-id requests in flight overwrote each other's pending waiter and one caller waited until timeout. Every request now draws a unique id.
+- **Failed daemon sessions are evicted.** A startup health-check failure left a dead session in the map until daemon restart. The session is now removed so the next use recreates it.
+- **HTTP transport retries a 429 once**, sleeping per `Retry-After` (capped at 10s), so a transient rate limit no longer fails HTTP-direct servers.
+- **Explicit `initialize` stays single.** Calling the client's `Initialize` no longer stacks a second initialize on top of the automatic handshake, which strict servers reject with -32602; it completes the handshake and returns the cached result.
+
+### Changed
+
+- **Daemon sessions survive slow servers.** With eviction plus the per-server timeout, a server that answers slowly now fails one operation and recovers on the next instead of poisoning the session.
+- Test stub MCP server builds with an explicit `.exe` suffix, fixing the stdio test suite on Windows runners.
+
+<!-- RELEASE:END 1.5.0 -->
+
 <!-- RELEASE:START 1.4.0 -->
 ## [1.4.0] - 2026-07-28
 
