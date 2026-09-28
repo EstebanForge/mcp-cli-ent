@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,6 +57,7 @@ func main() {
 	var received []map[string]interface{}
 	var initialized bool
 	var queued []incoming
+	var failFirstInitSent bool
 
 	writeSummary := func() {
 		b, _ := json.Marshal(received)
@@ -115,6 +117,30 @@ func main() {
 			out.Write(append(b, '\n'))
 			out.Flush()
 		case m.Method == "initialize":
+			if os.Getenv("STUB_FAIL_FIRST_INIT") != "" && !failFirstInitSent {
+				failFirstInitSent = true
+				resp := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      m.ID,
+					"error":   map[string]interface{}{"code": -32000, "message": "transient initialize failure"},
+				}
+				b, _ := json.Marshal(resp)
+				out.Write(append(b, '\n'))
+				out.Flush()
+				continue
+			}
+			if initialized {
+				// Real servers reject a second initialize.
+				resp := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      m.ID,
+					"error":   map[string]interface{}{"code": -32602, "message": "already initialized"},
+				}
+				b, _ := json.Marshal(resp)
+				out.Write(append(b, '\n'))
+				out.Flush()
+				continue
+			}
 			resp := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      m.ID,
@@ -160,7 +186,7 @@ func buildStubServer(t *testing.T) (string, string) {
 	if err := os.WriteFile(src, []byte(strictServerSrc), 0644); err != nil {
 		t.Fatalf("write stub source: %v", err)
 	}
-	bin := filepath.Join(dir, "strictserver-bin")
+	bin := filepath.Join(dir, "strictserver-bin.exe")
 	summary := filepath.Join(dir, "summary.json")
 	cmd := exec.Command("go", "build", "-o", bin, src)
 	cmd.Dir = dir
@@ -307,6 +333,126 @@ func TestListToolsHandshakeOncePerClient(t *testing.T) {
 	}
 	if lists != 2 {
 		t.Fatalf("tools/list sent %d times, want 2: [%s]", lists, joinMethods(entries))
+	}
+}
+
+// TestHandshakeRetriesAfterFailure: a transient initialize failure must not
+// poison the client; the next request retries the handshake. Break it guards:
+// a sync.Once-based handshake records completion even on failure, so after
+// one transient error every later request on the client hangs forever on
+// strict servers. The first call still surfaces the failure; recovery must
+// happen on the second call.
+func TestHandshakeRetriesAfterFailure(t *testing.T) {
+	bin, summary := buildStubServer(t)
+	t.Setenv("STUB_FAIL_FIRST_INIT", "1")
+
+	c, err := NewStdioClient(bin, []string{summary}, nil, &mcp.ClientConfig{Timeout: 10, ProtocolVersion: "auto"})
+	if err != nil {
+		t.Fatalf("NewStdioClient: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	_, firstErr := c.ListTools(context.Background())
+	if firstErr == nil {
+		t.Fatalf("first ListTools unexpectedly succeeded despite transient initialize failure")
+	}
+
+	tools, err := c.ListTools(context.Background())
+	if err != nil {
+		t.Fatalf("second ListTools did not recover after failed handshake: %v", err)
+	}
+	assertToolList(t, tools, "recovered call")
+
+	entries := readStubSummary(t, summary)
+	inits, notifs := 0, 0
+	for _, e := range entries {
+		switch e.Method {
+		case "initialize":
+			inits++
+		case "notifications/initialized":
+			notifs++
+		}
+	}
+	if inits != 2 {
+		t.Fatalf("initialize sent %d times, want 2 (failed attempt + retry): [%s]", inits, joinMethods(entries))
+	}
+	if notifs != 1 {
+		t.Fatalf("notifications/initialized sent %d times, want 1: [%s]", notifs, joinMethods(entries))
+	}
+}
+
+// TestConcurrentRequestsGetDistinctIDs: two concurrent ListTools calls on one
+// client must both be answered. Break it guards: hardcoded request ids make
+// the second caller overwrite the first's pending waiter, so one response is
+// lost and that caller times out.
+func TestConcurrentRequestsGetDistinctIDs(t *testing.T) {
+	bin, summary := buildStubServer(t)
+
+	c, err := NewStdioClient(bin, []string{summary}, nil, &mcp.ClientConfig{Timeout: 8, ProtocolVersion: "auto"})
+	if err != nil {
+		t.Fatalf("NewStdioClient: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	const n = 2
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = c.ListTools(context.Background())
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent ListTools %d failed: %v", i+1, err)
+		}
+	}
+}
+
+// TestExplicitInitializeSatisfiesHandshake: an explicit Initialize call must
+// complete the handshake (not stack a second one on top of the automatic
+// handshake) and leave the client usable. Break it guards: treating the
+// explicit call as a plain request double-initializes, and strict servers
+// reject the second initialize.
+func TestExplicitInitializeSatisfiesHandshake(t *testing.T) {
+	bin, summary := buildStubServer(t)
+
+	c, err := NewStdioClient(bin, []string{summary}, nil, &mcp.ClientConfig{ProtocolVersion: "2025-06-18"})
+	if err != nil {
+		t.Fatalf("NewStdioClient: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	result, err := c.Initialize(context.Background(), &mcp.InitializeParams{
+		ProtocolVersion: "2025-06-18",
+		Capabilities:    mcp.ClientCapabilities{},
+		ClientInfo:      mcp.ClientInfo{Name: "probe-test", Version: "0.0.1"},
+	})
+	if err != nil {
+		t.Fatalf("Initialize on strict server: %v", err)
+	}
+	if result == nil || result.ServerInfo.Name != "strict-stub" {
+		t.Fatalf("unexpected initialize result: %+v", result)
+	}
+
+	tools, err := c.ListTools(context.Background())
+	if err != nil {
+		t.Fatalf("ListTools after explicit Initialize: %v", err)
+	}
+	assertToolList(t, tools, "after explicit initialize")
+
+	entries := readStubSummary(t, summary)
+	inits := 0
+	for _, e := range entries {
+		if e.Method == "initialize" {
+			inits++
+		}
+	}
+	if inits != 1 {
+		t.Fatalf("initialize sent %d times, want exactly 1: [%s]", inits, joinMethods(entries))
 	}
 }
 

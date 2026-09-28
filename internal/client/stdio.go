@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mcp-cli-ent/mcp-cli/internal/mcp"
@@ -47,8 +48,13 @@ type StdioClient struct {
 	era           mcp.Era
 	capabilities  mcp.ClientCapabilities
 	detectOnce    sync.Once
-	handshakeOnce sync.Once
 	timeout       time.Duration // per-request window from config.Timeout
+
+	reqID          atomic.Uint64         // unique request ids; concurrent same-id requests overwrite each other's waiter
+	handshakeMutex sync.Mutex            // serializes legacy handshake attempts
+	handshaken     bool                  // set only on success; a failed attempt is retried
+	lastInitResult *mcp.InitializeResult // cached for idempotent explicit Initialize
+	lastInitErr    error                 // last handshake failure, surfaced by explicit Initialize
 }
 
 // NewStdioClient creates a new stdio MCP client
@@ -125,7 +131,7 @@ func NewStdioClient(command string, args []string, env map[string]string, config
 
 // ListTools retrieves available tools from the MCP server
 func (c *StdioClient) ListTools(ctx context.Context) ([]mcp.Tool, error) {
-	req := mcp.NewRequest(1, "tools/list", nil)
+	req := mcp.NewRequest(c.nextID(), "tools/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -157,7 +163,7 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 		Arguments: arguments,
 	}
 
-	req := mcp.NewRequest(2, "tools/call", params)
+	req := mcp.NewRequest(c.nextID(), "tools/call", params)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -184,7 +190,7 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 
 // ListResources retrieves available resources from the MCP server
 func (c *StdioClient) ListResources(ctx context.Context) ([]mcp.Resource, error) {
-	req := mcp.NewRequest(3, "resources/list", nil)
+	req := mcp.NewRequest(c.nextID(), "resources/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -209,9 +215,19 @@ func (c *StdioClient) ListResources(ctx context.Context) ([]mcp.Resource, error)
 	return listResult.Resources, nil
 }
 
-// Initialize the MCP connection
+// Initialize performs the MCP initialize handshake. On legacy-era clients it
+// is the handshake itself (idempotent; a later call returns the cached
+// result), so explicit and automatic initialization never stack a second
+// initialize, which strict servers reject.
 func (c *StdioClient) Initialize(ctx context.Context, params *mcp.InitializeParams) (*mcp.InitializeResult, error) {
-	req := mcp.NewRequest(0, "initialize", params)
+	if c.era == mcp.EraLegacy {
+		c.ensureLegacyHandshake(ctx)
+		c.handshakeMutex.Lock()
+		defer c.handshakeMutex.Unlock()
+		return c.lastInitResult, c.lastInitErr
+	}
+
+	req := mcp.NewRequest(c.nextID(), "initialize", params)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -238,7 +254,7 @@ func (c *StdioClient) Initialize(ctx context.Context, params *mcp.InitializePara
 
 // CreateMessage handles sampling requests
 func (c *StdioClient) CreateMessage(ctx context.Context, request *mcp.CreateMessageRequest) (*mcp.CreateMessageResult, error) {
-	req := mcp.NewRequest(0, "sampling/createMessage", request)
+	req := mcp.NewRequest(c.nextID(), "sampling/createMessage", request)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -265,7 +281,7 @@ func (c *StdioClient) CreateMessage(ctx context.Context, request *mcp.CreateMess
 
 // RequestInput handles elicitation requests
 func (c *StdioClient) RequestInput(ctx context.Context, params *mcp.RequestInputParams) (*mcp.RequestInputResult, error) {
-	req := mcp.NewRequest(0, "elicitation/requestInput", params)
+	req := mcp.NewRequest(c.nextID(), "elicitation/requestInput", params)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -292,7 +308,7 @@ func (c *StdioClient) RequestInput(ctx context.Context, params *mcp.RequestInput
 
 // ListRoots retrieves filesystem roots
 func (c *StdioClient) ListRoots(ctx context.Context) ([]mcp.Root, error) {
-	req := mcp.NewRequest(0, "roots/list", nil)
+	req := mcp.NewRequest(c.nextID(), "roots/list", nil)
 
 	result, err := c.sendRequest(ctx, req)
 	if err != nil {
@@ -398,9 +414,7 @@ func (c *StdioClient) sendRequest(ctx context.Context, req *mcp.JSONRPCRequest) 
 	// request; strict ones (e.g. the Automattic WordPress bridge) queue
 	// requests until it completes, so skip it only for modern servers.
 	if c.era == mcp.EraLegacy {
-		c.handshakeOnce.Do(func() {
-			c.legacyHandshake(ctx)
-		})
+		c.ensureLegacyHandshake(ctx)
 	}
 	if c.era == mcp.EraModern {
 		if err := mcp.InjectMeta(req, c.capabilities); err != nil {
@@ -459,11 +473,38 @@ func (c *StdioClient) fallbackLegacy(format string, args ...interface{}) {
 	}
 }
 
-// legacyHandshake performs the spec-required initialize +
-// notifications/initialized exchange once per client. Strict legacy servers
-// (e.g. the Automattic WordPress bridge) queue every request until the
-// handshake completes, so skipping it hangs all traffic until the deadline.
-func (c *StdioClient) legacyHandshake(ctx context.Context) {
+// nextID returns a unique request id. Hardcoded ids made concurrent callers
+// overwrite each other's pending waiter, losing one response until timeout.
+func (c *StdioClient) nextID() uint64 {
+	return c.reqID.Add(1)
+}
+
+// ensureLegacyHandshake runs the initialize exchange once per client and
+// retries on later calls if an earlier attempt failed. A completion marker
+// that fires on failure (sync.Once semantics) would poison the client:
+// every later request on a strict server would hang forever.
+func (c *StdioClient) ensureLegacyHandshake(ctx context.Context) {
+	c.handshakeMutex.Lock()
+	defer c.handshakeMutex.Unlock()
+	if c.handshaken {
+		return
+	}
+	result, err := c.performLegacyHandshake(ctx)
+	if err != nil {
+		c.lastInitErr = err
+		c.handshakeFailed("%v", err)
+		return
+	}
+	c.handshaken = true
+	c.lastInitResult = result
+	c.lastInitErr = nil
+}
+
+// performLegacyHandshake sends initialize + notifications/initialized.
+// Strict legacy servers (e.g. the Automattic WordPress bridge) queue every
+// request until the handshake completes, so skipping it hangs all traffic
+// until the deadline.
+func (c *StdioClient) performLegacyHandshake(ctx context.Context) (*mcp.InitializeResult, error) {
 	hctx, cancel := context.WithTimeout(ctx, stdioHandshakeTimeout)
 	defer cancel()
 
@@ -472,24 +513,30 @@ func (c *StdioClient) legacyHandshake(ctx context.Context) {
 		Capabilities:    c.capabilities,
 		ClientInfo:      mcp.ClientInfo{Name: mcp.ClientName, Version: mcp.ClientVersion},
 	}
-	req := mcp.NewRequest(0, "initialize", params)
+	req := mcp.NewRequest(c.nextID(), "initialize", params)
 	line, err := c.roundTrip(hctx, req)
 	if err != nil {
-		c.handshakeFailed("initialize: %v", err)
-		return
+		return nil, fmt.Errorf("initialize: %w", err)
 	}
 	rpcResp, err := mcp.UnmarshalResponse(line)
 	if err != nil {
-		c.handshakeFailed("parse initialize response: %v", err)
-		return
+		return nil, fmt.Errorf("parse initialize response: %w", err)
 	}
 	if rpcResp.Error != nil {
-		c.handshakeFailed("initialize rejected: %d %s", rpcResp.Error.Code, rpcResp.Error.Message)
-		return
+		return nil, fmt.Errorf("initialize rejected: %d %s", rpcResp.Error.Code, rpcResp.Error.Message)
 	}
 	if err := c.notify("notifications/initialized"); err != nil {
-		c.handshakeFailed("send notifications/initialized: %v", err)
+		return nil, fmt.Errorf("send notifications/initialized: %w", err)
 	}
+	var result mcp.InitializeResult
+	resultBytes, err := json.Marshal(rpcResp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal initialize result: %w", err)
+	}
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal initialize result: %w", err)
+	}
+	return &result, nil
 }
 
 // handshakeFailed records a failed handshake without aborting the request:
