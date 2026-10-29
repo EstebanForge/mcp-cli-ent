@@ -84,6 +84,19 @@ make test
 
 ## Build System
 
+### Quick Commands (`just` recipes)
+
+```bash
+just            # List all available targets
+just build      # Build dev binary to bin/mcp-cli-ent
+just build-release # Build optimized release binary
+just fmt        # Format code
+just vet        # Run go vet
+just test       # Run unit tests
+just check      # Full check suite (config, fmt, vet, lint, test, build)
+just ci         # Run check pipeline locally
+```
+
 ### Make Targets
 
 **Development:**
